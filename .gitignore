@@ -1,1 +1,28 @@
+# --- Python (Flask & PyTorch) ---
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.env
 
+# --- Flutter (Mobile App) ---
+.dart_tool/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+*.log
+
+# --- ESP32 / Arduino (C++) ---
+*.bin
+*.elf
+*.hex
+*.ino.cpp
+build/
+
+# --- General/OS ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
