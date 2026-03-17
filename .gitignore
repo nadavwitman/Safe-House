@@ -28,4 +28,7 @@ Thumbs.db
 .idea/
 
 # --- Firebase ---
-Backend_Server/firebase-credentials.json
+Backend_Server/app/firebase-credentials.json
+
+# --- AI Model ---
+*.csv
