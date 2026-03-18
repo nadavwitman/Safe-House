@@ -1,22 +1,28 @@
 import threading
 from collections import deque
-
 class SensorDataBuffer:
-    def __init__(self, max_len=1000):
-        # deque with maxlen automatically drops oldest items when full
-        self.buffer = deque(maxlen=max_len)
-        # Lock ensures data integrity during concurrent API requests
-        self.lock = threading.Lock()
+    def __init__(self, threshold=10):
 
-    def add_reading(self, reading):
-        # Thread-safe append to the end of the buffer
-        with self.lock:
-            self.buffer.append(reading)
+        self.buffer = []
 
-    def get_latest_window(self, window_size=10):
-        # Thread-safe retrieval of the N most recent readings
-        with self.lock:
-            return list(self.buffer)[-window_size:]
+        self.threshold = threshold
+        # This flag will be set true if the system is up and running
+        self.is_active = True
 
-# Global instance to be shared across the Flask application
-sensor_buffer = SensorDataBuffer()
+    def add_reading(self, data):
+        """ Adds new data to the buffer only if the system is up """
+        if self.is_active:
+            self.buffer.append(data)
+
+    def has_enough_data(self):
+        """ Checks whether we have enough data in the buffer to send to the AI model """
+        return len(self.buffer) >= self.threshold
+
+    def get_all_readings(self):
+        return self.buffer
+
+    def clear(self):
+        self.buffer = []
+
+# The global object buffer that will be filled by the ESP32 logs
+sensor_buffer = SensorDataBuffer(threshold=10)

@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify
+from app.core.data_buffer import sensor_buffer
 
 # Define the blueprint for configuration routing
 config_bp = Blueprint('config', __name__)
@@ -14,9 +15,14 @@ def config_system():
          return jsonify({"error": "No configuration data provided"}), 400
 
     mode = config_data.get('mode')
-    
+
     if mode == "Vacation":
-        # TODO: Insert function to stop the AI model from processing data
+        sensor_buffer.is_active = False
+        sensor_buffer.clear()
         return jsonify({"status": "success", "mode": "Vacation", "model_updated": False}), 200
+
+    elif mode == "Normal":
+        sensor_buffer.is_active = True
+        return jsonify({"status": "success", "mode": "Normal", "model_updated": True}), 200
 
     return jsonify({"status": "success", "message": "Configuration updated"}), 200
