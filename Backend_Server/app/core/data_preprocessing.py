@@ -3,6 +3,7 @@ from datetime import datetime
 from sklearn.preprocessing import MinMaxScaler
 import joblib
 import os
+import numpy as np
 
 # Define the path to save/load the scaler object
 # This path goes up from 'core', up from 'app', into 'AI_Model'
@@ -22,18 +23,25 @@ def format_sensor_data(raw_data):
     # Handle Time-Series columns
     if 'time' in df.columns:
         df['time'] = pandas.to_datetime(df['time'])
-        df['hour'] = df['time'].dt.hour
-        df['day_of_week'] = df['time'].dt.dayofweek
-        df = df.sort_values(by='time').reset_index(drop=True)
     else:
         # Fallback to current server time if missing
         current_time = datetime.now()
         df['time'] = current_time
-        df['hour'] = current_time.hour
-        df['day_of_week'] = current_time.weekday()
 
+    # Extract the raw hour and day of the week
+    hour_raw = df['time'].dt.hour
+    day_raw = df['time'].dt.dayofweek
+
+    # Sin and Cos encoding in ordere to create circular data
+    df['hour_sin'] = np.sin(2 * np.pi * hour_raw / 24)
+    df['hour_cos'] = np.cos(2 * np.pi * hour_raw / 24)
+
+    df['day_sin'] = np.sin(2 * np.pi * day_raw / 7)
+    df['day_cos'] = np.cos(2 * np.pi * day_raw / 7)
+
+    df = df.sort_values(by='time').reset_index(drop=True)
     # Encode sensor states using NumPy (e.g., 'open' -> 1, 'closed' -> 0)
-    if 'sensor-vector' in df.columns:
+    if 'sensor_vector' in df.columns:
         # Parse the 7-bit vector into seperate columns for each vector
         sensor_cols = pandas.DataFrame(df['sensor_vector'].tolist(), columns=[f'sensor_{i}' for i in range(0,7)])
         # Merge the 7 columns into one table
@@ -49,42 +57,14 @@ def format_sensor_data(raw_data):
 
 
 
-def scale_sensor_data(df, is_training=False):
-    """
-    Step 2: Scale and normalize numerical features using Scikit-Learn.
-    Uses MinMaxScaler to bound values between 0 and 1 for the LSTM model.
-    """
-    numerical_cols = ['hour', 'day_of_week']
-    cols_to_scale = [col for col in numerical_cols if col in df.columns]
-    if not cols_to_scale:
-        return df
-    if is_training:
-        scaler = MinMaxScaler()
-        df[cols_to_scale] = scaler.fit_transform(df[cols_to_scale])
-        # Save the scaler for future inference
-        os.makedirs(os.path.dirname(SCALER_PATH), exist_ok=True)
-        joblib.dump(scaler, SCALER_PATH)
-        print(f"Scaler updated and saved successfully to {SCALER_PATH}")
-    else:
-        # Inference mode: Load existing scaler
-        try:
-            scaler = joblib.load(SCALER_PATH)
-            df[cols_to_scale] = scaler.transform(df[cols_to_scale])
-        except FileNotFoundError:
-            print(f"Warning: Scaler file not found at {SCALER_PATH}. Returning unscaled data.")
-    return df
 
 # The 'main' function of this class. Recieves raw data and returns a df that can be an input for the AI model
-def run_preprocessing_pipeline(raw_data, is_training=False):
+def run_preprocessing_pipeline(raw_data):
     """
     Main function to run the full preprocessing pipeline.
     This is the function you will call from your routes.py.
     """
     # 1. Format the data
     df = format_sensor_data(raw_data)
-
-    # 2. Scale the data
-    df_scaled = scale_sensor_data(df, is_training=is_training)
-    # Pick only the ai_related columns and send them
-    cols_for_ai = [f'sensor_{i}' for i in range(7)] + ['hour', 'day_of_week']
-    return df_scaled[cols_for_ai]
+    cols_for_ai = [f'sensor_{i}' for i in range(7)] + ['hour_sin', 'hour_cos', 'day_sin', 'day_cos']
+    return df[cols_for_ai]

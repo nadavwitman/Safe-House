@@ -25,8 +25,8 @@ class Encoder(nn.Module):
         return hidden_n.reshape((x.shape[0], 1, self.embedding_dim))
 
 class Decoder(nn.Module):
-    # 9 default n_features: 7 sensors + hour + day_of_week
-    def __init__(self, seq_len, embedding_dim=32, n_features=9):
+    # 11 default n_features: 7 sensors + hour_sin + hour_cos + day_sin + day_cos
+    def __init__(self, seq_len, embedding_dim=32, n_features=11):
         super(Decoder, self).__init__()
         self.seq_len, self.embedding_dim = seq_len, embedding_dim
         self.hidden_dim, self.n_features = 2 * embedding_dim, n_features
@@ -59,24 +59,22 @@ def evaluate_buffer_with_AI(buffer_data_list, latest_sensor_id: str, house_senso
     This function will receive and clean the buffer and then send it to the model to get a decision
     """
     try:
-        clean_data_df = run_preprocessing_pipeline(buffer_data_list, is_training=False)
-        # Pull the 7 sensor columns plus the 2 time columns
-        features_to_use = [f'sensor_{i}' for i in range(7)] + ['hour', 'day_of_week']
-        clean_data_array = clean_data_df[features_to_use].values
-
+        # Pull the 7 sensor columns plus the 4 time columns
+        clean_data_df = run_preprocessing_pipeline(buffer_data_list)
+        clean_data_array = clean_data_df.values
     except Exception as e:
         print(f"[Bypass] Preprocessing failed ({e}). Forcing AI with random chaos data!")
-        return
+        return (latest_sensor_id, "Normal")
 
     seq_len = len(clean_data_array)
     # Building the tensor that will be sent to the model
     tensor_input = torch.FloatTensor(clean_data_array).unsqueeze(0)
-    # Create the complete mask include 1 value for the last 2 bits (because they represent the time and day and not a sensor)
-    full_mask = house_sensor_mask + [1, 1]
+    # Create the complete mask include 1 value for the last 4 bits (because they represent the time and day and not a sensor)
+    full_mask = house_sensor_mask + [1, 1, 1, 1]
     # Transforming the tesor mask into a 3 dimentional tenzor
     mask_tensor = torch.FloatTensor(full_mask).view(1, 1, -1)
-    # Initiate the model with 9 features
-    model = LSTMAnomalyDetector(seq_len=seq_len, n_features=9, embedding_dim=32)
+    # Initiate the model with 11 features
+    model = LSTMAnomalyDetector(seq_len=seq_len, n_features=11, embedding_dim=32)
     try:
         model.load_state_dict(torch.load(MODEL_PATH, map_location=torch.device('cpu')))
         model.eval() # Inference Mode
