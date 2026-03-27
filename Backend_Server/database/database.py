@@ -8,21 +8,14 @@ cred = credentials.Certificate(CRED_PATH)
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
-def log_sensor_event(sensor_id, action, house_id='default_house'):
+def log_vector_reading(data, house_id='default_house'):
     """
-    Saves sensor activity to a specific house's subcollection in Firestore.
-    The structure follows: houses -> {house_id} -> sensor_logs -> {auto_generated_doc}.
+    Saves a sensor vector reading to a house's subcollection in Firestore.
+    Structure: houses -> {house_id} -> sensor_vectors -> {auto_generated_doc}
     """
+    doc_ref = db.collection('houses').document(house_id).collection('sensor_vectors').document()
 
-    # Navigate to the specific house and its sensor_logs subcollection
-    doc_ref = db.collection('houses').document(house_id).collection('sensor_logs').document()
-
-    # Store the original data structure (sensor, action, and server timestamp)
     doc_ref.set({
-        'sensor': sensor_id,
-        'action': action,
-        'timestamp': firestore.SERVER_TIMESTAMP
+        'sensor_vector': data.get('sensor_vector'),
+        'time': data.get('time')
     })
-
-    # Output log for development tracking
-    print(f"Logged {sensor_id} for house {house_id}: {action} successfully!")
