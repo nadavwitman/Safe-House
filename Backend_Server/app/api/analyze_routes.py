@@ -18,19 +18,27 @@ def analyze_data():
         data = request.get_json()
         if not data:
             return jsonify({"error": "No data provided"}), 400
+        
         # Insert the data to the buffer
         if getattr(sensor_buffer, 'is_active', True):
             sensor_buffer.add_reading(data)
         house_id = data.get('house_id', 'default_house')
+
+        # Persist the vector reading to Firestore
+        database.log_vector_reading(data, house_id)
+
         ai_sensor = "System_Vector"
         ai_decision = "Normal"
+
         # Aquire all current buffer data for processing
         buffer_data = sensor_buffer.get_all_readings()
+
         # Making sure we have at least 1 minute to send to the model
         if len(buffer_data) > 0:
             house_mask = get_house_mask_from_db(house_id)
             # get the AI model decision
             ai_sensor, ai_decision = evaluate_buffer_with_AI(buffer_data, ai_sensor, house_mask)
+            
         # Act accordingly to the model's decision
         match ai_decision:
             case "Warning" | "Emergency":
