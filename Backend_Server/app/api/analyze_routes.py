@@ -7,6 +7,9 @@ from app.core.ai_handler import evaluate_buffer_with_AI
 
 analyze_bp = Blueprint('analyze', __name__)
 
+# Sensor index mapping: 0=Door  1=Kitchen  2=Bath  3=Toilet  4=Meds  5=Bed  6=Living Room
+DEFAULT_LOCATION = 0
+
 
 @analyze_bp.route('/api/analyze', methods=['POST'])
 def analyze_data():
@@ -14,17 +17,28 @@ def analyze_data():
         data = request.get_json()
         if not data:
             return jsonify({"error": "No data provided"}), 400
-        
-        # Insert the data to the buffer
-        if getattr(sensor_buffer, 'is_active', True):
-            sensor_buffer.add_reading(data)
+
         house_id = data.get('house_id', 'default_house')
 
-        # Persist the vector reading to Firestore
-        database.log_vector_reading(data, house_id)
+        # Resolve current_location: payload → last buffer reading → last DB value → default
+        current_location = data.get('current_location')
+        if not (isinstance(current_location, int) and 0 <= current_location < 7):
+            last_reading = sensor_buffer.get_last_reading(house_id)
+            last_loc = last_reading.get('current_location') if last_reading else None
+            if isinstance(last_loc, int) and 0 <= last_loc < 7:
+                current_location = last_loc
+            else:
+                current_location = database.get_last_current_location(house_id)
 
+        # Inject resolved value into data before buffering
+        data['current_location'] = current_location if current_location is not None else DEFAULT_LOCATION
         ai_sensor = "System_Vector"
         ai_decision = "Normal"
+
+        # Add to buffer and persist (now with resolved current_location)
+        if getattr(sensor_buffer, 'is_active', True):
+            sensor_buffer.add_reading(data)
+        database.log_vector_reading(data, house_id)
 
         # Aquire all current buffer data for processing
         buffer_data = sensor_buffer.get_all_readings()
@@ -34,7 +48,7 @@ def analyze_data():
             house_mask = house_mask_store.get_mask(house_id)
             # get the AI model decision
             ai_sensor, ai_decision = evaluate_buffer_with_AI(buffer_data, ai_sensor, house_mask)
-            
+
         # Act accordingly to the model's decision
         match ai_decision:
             case "Warning" | "Emergency":
