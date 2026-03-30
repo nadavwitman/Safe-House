@@ -4,6 +4,7 @@ from sklearn.preprocessing import MinMaxScaler
 import joblib
 import os
 import numpy as np
+import torch
 
 # Define the path to save/load the scaler object
 # This path goes up from 'core', up from 'app', into 'AI_Model'
@@ -61,10 +62,24 @@ def format_sensor_data(raw_data):
 # The 'main' function of this class. Recieves raw data and returns a df that can be an input for the AI model
 def run_preprocessing_pipeline(raw_data):
     """
-    Main function to run the full preprocessing pipeline.
-    This is the function you will call from your routes.py.
+    הפונקציה המעודכנת שכוללת נרמול (Scaling)
     """
-    # 1. Format the data
+    # 1. סידור הנתונים ל-DataFrame (מה שחבר שלך כבר כתב)
     df = format_sensor_data(raw_data)
     cols_for_ai = [f'sensor_{i}' for i in range(7)] + ['hour_sin', 'hour_cos', 'day_sin', 'day_cos']
-    return df[cols_for_ai]
+    data_raw = df[cols_for_ai]
+
+    # --- הקטע שחסר (התיקון): ---
+    
+    # 2. טעינת ה-Scaler ששמרנו ב-Colab
+    # הערה: וודא שהקובץ scaler.pkl נמצא בנתיב שמוגדר ב-SCALER_PATH
+    scaler = joblib.load(SCALER_PATH)
+    
+    # 3. נרמול הנתונים (הופך אותם לערכים בין 0 ל-1)
+    data_scaled = scaler.transform(data_raw)
+    
+    # 4. המרה לטנזור של PyTorch (כדי שהמודל יוכל לעבוד איתו)
+    # מוסיפים ממד נוסף (unsqueeze) כדי שזה ייראה כמו Batch
+    input_tensor = torch.tensor(data_scaled, dtype=torch.float32).unsqueeze(0)
+    
+    return input_tensor
