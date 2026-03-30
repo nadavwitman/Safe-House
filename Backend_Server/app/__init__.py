@@ -7,9 +7,11 @@ def create_app():
     # Import blueprints locally to avoid circular dependencies
     from app.api.analyze_routes import analyze_bp
     from app.api.config_routes import config_bp
-    
+    from app.api.house_routes import house_bp
+
     # Register the API routes under the app instance
     app.register_blueprint(analyze_bp)
     app.register_blueprint(config_bp)
+    app.register_blueprint(house_bp)
     
     return app

@@ -1,15 +1,11 @@
 from flask import Blueprint, request, jsonify
 from app.core.data_buffer import sensor_buffer
+from app.core.house_mask_store import house_mask_store
 import database.database as database
 from app.core import notifications
 from app.core.ai_handler import evaluate_buffer_with_AI
 
 analyze_bp = Blueprint('analyze', __name__)
-
-
-# TODO: Right now this is a mock mask built for 4 sensors, implement a real one when database logic is ready
-def get_house_mask_from_db(house_id):
-    return [1, 1, 1, 1, 0, 0, 0]
 
 
 @analyze_bp.route('/api/analyze', methods=['POST'])
@@ -35,7 +31,7 @@ def analyze_data():
 
         # Making sure we have at least 1 minute to send to the model
         if len(buffer_data) > 0:
-            house_mask = get_house_mask_from_db(house_id)
+            house_mask = house_mask_store.get_mask(house_id)
             # get the AI model decision
             ai_sensor, ai_decision = evaluate_buffer_with_AI(buffer_data, ai_sensor, house_mask)
             
