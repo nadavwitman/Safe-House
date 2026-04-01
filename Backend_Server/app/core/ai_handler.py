@@ -6,12 +6,15 @@ from app.core.data_preprocessing import run_preprocessing_pipeline
 
 BASE_DIR = os.path.dirname(__file__)
 MODEL_PATH = os.path.join(BASE_DIR, "../../../AI_Model/lstm_safe_house_model.pth")
-THRESHOLD = 0.025
+EMERGENCY_THRESHOLD = 0.11
+WARNING_THRESHOLD = 0.10    
 # ================================================================================================================
-# Create the classes that will generate the weights by running the data in the encoder and out through the decoder
+# LSTM Autoencoder: the Encoder compresses the input sequence into a latent representation,
+# the Decoder reconstructs it. High reconstruction error = anomaly.
 # ================================================================================================================
 
 class Encoder(nn.Module):
+    """Compresses a sequence of sensor readings into a fixed-size latent vector."""
     def __init__(self, seq_len, n_features, embedding_dim=64):
         super(Encoder, self).__init__()
         self.seq_len, self.n_features = seq_len, n_features
@@ -25,8 +28,9 @@ class Encoder(nn.Module):
         return hidden_n.reshape((x.shape[0], 1, self.embedding_dim))
 
 class Decoder(nn.Module):
-    # 11 default n_features: 7 sensors + hour_sin + hour_cos + day_sin + day_cos
-    def __init__(self, seq_len, embedding_dim=64, n_features=11):
+    """Reconstructs the original sequence from the latent vector produced by the Encoder."""
+    # 12 default n_features: 7 sensors + hour_sin + hour_cos + day_sin + day_cos + current_location
+    def __init__(self, seq_len, embedding_dim=64, n_features=12):
         super(Decoder, self).__init__()
         self.seq_len, self.embedding_dim = seq_len, embedding_dim
         self.hidden_dim, self.n_features = 2 * embedding_dim, n_features
@@ -41,6 +45,7 @@ class Decoder(nn.Module):
         return self.output_layer(x)
 
 class LSTMAnomalyDetector(nn.Module):
+    """Full autoencoder: wraps Encoder + Decoder into a single model."""
     def __init__(self, seq_len, n_features, embedding_dim=64):
         super(LSTMAnomalyDetector, self).__init__()
         self.encoder = Encoder(seq_len, n_features, embedding_dim)
@@ -56,49 +61,56 @@ class LSTMAnomalyDetector(nn.Module):
 # ===========================================================================
 def evaluate_buffer_with_AI(buffer_data_list, latest_sensor_id: str, house_sensor_mask: list) -> tuple[str, str]:
     """
-    פונקציה מעודכנת המטפלת בטנזורים ופותרת את שגיאת ה-TypeError
+    Runs the LSTM Autoencoder on the current buffer and returns an anomaly decision.
+
+    The model reconstructs the input sequence; a high MSE loss indicates the pattern
+    deviates from the learned routine. The house_sensor_mask disables loss contribution
+    from sensors that are not installed in this specific house.
+
+    Returns:
+        (sensor_id, decision) where decision is "Normal", "Warning", or "Emergency"
     """
     try:
-        # 1. קבלת הנתונים המעובדים (כבר מגיעים כטנזור מה-Preprocessing)
+        # 1. Preprocess the raw buffer into a scaled PyTorch tensor
         tensor_input = run_preprocessing_pipeline(buffer_data_list)
-        
-        # מוודא שהטנזור בפורמט Float32
+
+        # Ensure Float32 format
         if not isinstance(tensor_input, torch.Tensor):
             tensor_input = torch.FloatTensor(tensor_input)
-            
-        # הוספת ממד Batch אם חסר (צריך להיות [1, 360, 11])
+
+        # Add batch dimension if missing: [seq_len, features] -> [1, seq_len, features]
         if tensor_input.dim() == 2:
             tensor_input = tensor_input.unsqueeze(0)
 
-        # חילוץ אורך הרצף (בדרך כלל 360)
         seq_len = tensor_input.shape[1]
 
     except Exception as e:
-        print(f"[🚨] Preprocessing failed: {e}")
+        print(f"Preprocessing failed: {e}")
         return (latest_sensor_id, "Normal")
 
-    # 2. אתחול וטעינת המודל
-    # הערה: וודא ש-embedding_dim תואם למה שהגדרת ב-Colab (אם זה היה 64, שנה ל-64)
-    model = LSTMAnomalyDetector(seq_len=seq_len, n_features=11, embedding_dim=64)
-    
+    # 2. Initialize and load the trained model
+    # Note: embedding_dim must match the value used during Colab training
+    model = LSTMAnomalyDetector(seq_len=seq_len, n_features=12, embedding_dim=64)
+
     try:
         model.load_state_dict(torch.load(MODEL_PATH, map_location=torch.device('cpu')))
         model.eval()
     except Exception as e:
-        print(f"[🚨] Error loading PyTorch model: {e}")
+        print(f"Error loading PyTorch model: {e}")
         return (latest_sensor_id, "Normal")
 
-    # 3. חישוב האנומליה
+    # 3. Compute reconstruction loss (anomaly score)
     with torch.no_grad():
         reconstructed = model(tensor_input)
-        
-        # חישוב השגיאה הגולמית
+
+        # Per-element MSE between input and reconstruction
         raw_loss = nn.functional.mse_loss(reconstructed, tensor_input, reduction='none')
-        
-        # החלת ה-Mask כדי להתעלם מחיישנים שלא קיימים בבית
-        full_mask = house_sensor_mask + [1, 1, 1, 1]
+
+        # Apply house sensor mask so disabled sensors don't contribute to the loss.
+        # Time features and current_location are always active (trailing 1s).
+        full_mask = house_sensor_mask + [1, 1, 1, 1, 1]  # 7 sensors + 4 time + 1 location = 12
         mask_tensor = torch.FloatTensor(full_mask).view(1, 1, -1)
-        
+
         masked_loss = raw_loss * mask_tensor
         active_elements = mask_tensor.sum() * seq_len
         final_loss = masked_loss.sum() / active_elements
@@ -106,10 +118,10 @@ def evaluate_buffer_with_AI(buffer_data_list, latest_sensor_id: str, house_senso
 
     print(f"[AI] Evaluated sequence. Anomaly Loss: {loss_value:.4f}")
 
-# כיול מחדש לפי תוצאות הבדיקה בשרת (0.089 מול 0.117)
-    if loss_value > 0.11: # רק אנומליה חריפה באמת
+    # Thresholds re-calibrated based on server test results (0.089 normal vs 0.117 anomaly)
+    if loss_value > EMERGENCY_THRESHOLD:   # Sharp anomaly — immediate danger
         return (latest_sensor_id, "Emergency")
-    elif loss_value > 0.10: # אנומליה קלה או גבולית
+    elif loss_value > WARNING_THRESHOLD: # Mild / borderline anomaly
         return (latest_sensor_id, "Warning")
     else:
         return (latest_sensor_id, "Normal")

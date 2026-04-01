@@ -24,6 +24,13 @@ class SensorDataBuffer:
         """ Returns the buffer as a standard Python list for Pandas to process """
         return list(self.buffer)
 
+    def get_last_reading(self, house_id):
+        """ Returns the most recent reading for the given house_id, or None if not found """
+        for reading in reversed(self.buffer):
+            if reading.get('house_id') == house_id:
+                return reading
+        return None
+
     def clear(self):
         """ Clears the buffer (useful if the system reboots or resets) """
         self.buffer.clear()
