@@ -50,5 +50,5 @@ if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
     atexit.register(lambda: scheduler.shutdown())
 
 if __name__ == '__main__':
-    # activate the backend server
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Run server: accessible externally, on port 5000, with debug mode on
+    app.run(host='0.0.0.0', port=5000, debug=True)
