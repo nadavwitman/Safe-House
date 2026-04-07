@@ -151,14 +151,14 @@ def fine_tune_house_model(house_id: str, raw_training_data: list, house_sensor_m
     except Exception as e:
         print(f"Error preprocessing fine-tuning data: {e}")
         return False
-    # The mask for the hour and day sin and cos and location, which should always be included
-    full_mask = house_sensor_mask + [1, 1, 1, 1, 1]
+    # The mask for the 7 bit sensor vector, 7 bit last location vector, hour and day sin and cos and which should always be included
+    full_mask = house_sensor_mask + house_sensor_mask + [1, 1, 1, 1]
     mask_tensor = torch.FloatTensor(full_mask).view(1, 1, -1)
 
     house_model_path = os.path.join(BASE_DIR, f"../../../AI_Model/lstm_safe_house_{house_id}.pth")
     load_path = house_model_path if os.path.exists(house_model_path) else MODEL_PATH
 
-    model = LSTMAnomalyDetector(seq_len=seq_len, n_features=12, embedding_dim=64)
+    model = LSTMAnomalyDetector(seq_len=seq_len, n_features=13, embedding_dim=64)
     model.load_state_dict(torch.load(load_path, map_location=torch.device('cpu')))
 
     # A snapshot of the current pre-fine-tuning data based on the current .pth file

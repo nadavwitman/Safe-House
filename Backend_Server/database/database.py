@@ -52,7 +52,6 @@ def get_last_current_location(house_id='default_house'):
     return None
 
 
-from datetime import datetime, timedelta, timezone
 
 def fetch_finetuning_data(house_id='default_house'):
     """
