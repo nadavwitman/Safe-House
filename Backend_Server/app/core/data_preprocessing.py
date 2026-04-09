@@ -59,16 +59,14 @@ def format_sensor_data(raw_data):
         for i in range(7):
             df[f'sensor_{i}'] = 0
 
-    # --- CRITICAL CHANGE: Convert current_location to 7 binary location columns ---
-    # This creates location_0 to location_6 to match the 18-feature architecture
-    for i in range(7):
-        df[f'location_{i}'] = 0
-    
+    # Expand current_location 7-bit vector into individual location columns
     if 'current_location' in df.columns:
-        for i in range(7):
-            # If the current_location matches the index, set that column to 1
-            df.loc[df['current_location'] == i, f'location_{i}'] = 1
+        loc_cols = pandas.DataFrame(df['current_location'].tolist(), columns=[f'location_{i}' for i in range(7)])
+        df = pandas.concat([df, loc_cols], axis=1)
         df = df.drop(columns=['current_location'])
+    else:
+        for i in range(7):
+            df[f'location_{i}'] = 0
 
     # Forward-fill then zero-fill any remaining NaN values
     df = df.ffill().fillna(0)
