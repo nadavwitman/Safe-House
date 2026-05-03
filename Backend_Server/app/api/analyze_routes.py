@@ -8,7 +8,7 @@ from app.core.ai_handler import evaluate_buffer_with_AI
 analyze_bp = Blueprint('analyze', __name__)
 
 # Sensor index mapping: 0=Door  1=Kitchen  2=Bath  3=Toilet  4=Meds  5=Bed  6=Living Room
-DEFAULT_LOCATION = 0
+DEFAULT_LOCATION = [0, 0, 0, 0, 0, 0, 1]
 
 
 @analyze_bp.route('/api/analyze', methods=['POST'])
@@ -22,10 +22,10 @@ def analyze_data():
 
         # Resolve current_location: payload → last buffer reading → last DB value → default
         current_location = data.get('current_location')
-        if not (isinstance(current_location, int) and 0 <= current_location < 7):
+        if not (isinstance(current_location, list) and len(current_location) == 7 and all(b in (0, 1) for b in current_location)):
             last_reading = sensor_buffer.get_last_reading(house_id)
             last_loc = last_reading.get('current_location') if last_reading else None
-            if isinstance(last_loc, int) and 0 <= last_loc < 7:
+            if isinstance(last_loc, list) and len(last_loc) == 7 and all(b in (0, 1) for b in last_loc):
                 current_location = last_loc
             else:
                 current_location = database.get_last_current_location(house_id)

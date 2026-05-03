@@ -11,3 +11,7 @@ torch>=2.1.0
 
 # --- Cloud & Database ---
 firebase-admin==7.2.0
+
+# --- Weekly Insights ---
+google-generativeai>=0.7.0
+APScheduler>=3.10.0
