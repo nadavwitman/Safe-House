@@ -2,7 +2,9 @@ import os
 from datetime import datetime, timezone, timedelta
 import pandas as pd
 import firebase_admin
+import random
 from firebase_admin import credentials, firestore
+from datetime import datetime, timedelta, timezone
 BASE_DIR = os.path.dirname(__file__)
 CRED_PATH = os.path.join(BASE_DIR, 'firebase-credentials.json')
 # Auth loading
@@ -93,3 +95,19 @@ def save_weekly_report(house_id, report_dict):
     db.collection('houses').document(house_id).set(
         {'weekly_report': report_dict}, merge=True
     )
+
+def fetch_finetuning_data(house_id='default_house'):
+    """
+   Fetch data from the last 14 days
+    """
+    vectors_ref = db.collection('houses').document(house_id).collection('sensor_vectors')
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=14)
+
+    # Organise the data in a dictionary
+    new_docs = vectors_ref.where('time', '>=', cutoff_date).get()
+    new_data = [doc.to_dict() for doc in new_docs]
+
+    # Sort by chronological order
+    new_data.sort(key=lambda x: x['time'])
+
+    return new_data
