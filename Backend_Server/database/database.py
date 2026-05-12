@@ -96,6 +96,14 @@ def save_weekly_report(house_id, report_dict):
         {'weekly_report': report_dict}, merge=True
     )
 
+
+def get_weekly_report(house_id):
+    """Returns the last saved weekly report for a house, or None if none exists."""
+    doc = db.collection('houses').document(house_id).get()
+    if not doc.exists:
+        return None
+    return doc.to_dict().get('weekly_report')
+
 def fetch_finetuning_data(house_id='default_house'):
     """
    Fetch data from the last 14 days

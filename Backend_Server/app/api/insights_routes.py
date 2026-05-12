@@ -5,11 +5,13 @@ from flask import Blueprint, jsonify, request
 
 import database.database as database
 from app.weekly_summary.report_generator import run_insights_pipeline
+from app.auth.decorators import house_member_required
 
 insights_bp = Blueprint('insights', __name__)
 
 
 @insights_bp.route('/api/insights/weekly', methods=['POST'])
+@house_member_required
 def trigger_weekly_insights():
     try:
         data = request.get_json() or {}
@@ -54,3 +56,20 @@ def trigger_weekly_insights():
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+
+@insights_bp.route('/api/insights/weekly/<house_id>', methods=['GET'])
+@house_member_required
+def get_weekly_report(house_id):
+    report = database.get_weekly_report(house_id)
+    if not report:
+        return jsonify({"status": "no_report", "message": "No weekly report available yet."}), 200
+
+    return jsonify({
+        "status": "success",
+        "house_id": house_id,
+        "period": report.get("period"),
+        "generated_at": str(report.get("generated_at", "")),
+        "metrics": report.get("metrics"),
+        "ai_output": report.get("ai_output"),
+    }), 200

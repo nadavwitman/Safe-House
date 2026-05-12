@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from datetime import date as _date
 
 from google import genai
@@ -127,6 +128,10 @@ def format_compact_prompt(weekly_metrics, house_id):
 # Gemini API call
 # ---------------------------------------------------------------------------
 
+_RETRY_INTERVAL_SECONDS = 10 * 60  # 10 minutes between retries
+_MAX_RETRIES = 10
+
+
 def generate_weekly_report(compact_prompt):
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
@@ -135,13 +140,33 @@ def generate_weekly_report(compact_prompt):
             "Set it before starting the server: export GEMINI_API_KEY='your_key'"
         )
 
-    client   = genai.Client(api_key=api_key)
-    response = client.models.generate_content(
-        model    = GEMINI_MODEL,
-        contents = PROMPT_TEMPLATE.format(compact_prompt=compact_prompt),
-        config   = types.GenerateContentConfig(response_mime_type="application/json"),
-    )
-    return json.loads(response.text)
+    client = genai.Client(api_key=api_key)
+    last_exc = None
+
+    for attempt in range(1, _MAX_RETRIES + 1):
+        try:
+            response = client.models.generate_content(
+                model    = GEMINI_MODEL,
+                contents = PROMPT_TEMPLATE.format(compact_prompt=compact_prompt),
+                config   = types.GenerateContentConfig(response_mime_type="application/json"),
+            )
+            return json.loads(response.text)
+        except Exception as exc:
+            last_exc = exc
+            err_str = str(exc).lower()
+            retryable = any(kw in err_str for kw in (
+                "429", "503", "overloaded", "resource exhausted",
+                "quota", "unavailable", "too many requests",
+            ))
+            if not retryable or attempt == _MAX_RETRIES:
+                raise
+            print(
+                f"[ReportGenerator] Gemini overloaded (attempt {attempt}/{_MAX_RETRIES}): {exc}. "
+                f"Retrying in {_RETRY_INTERVAL_SECONDS // 60} minutes..."
+            )
+            time.sleep(_RETRY_INTERVAL_SECONDS)
+
+    raise last_exc
 
 
 # ---------------------------------------------------------------------------

@@ -17,11 +17,10 @@ def scheduled_fine_tuning_job():
     print("[03:00 AM] Starting automatic Weight Interpolation fine-tuning...")
 
     try:
-        # Go throguh all the houses in the database
-        houses_ref = database.db.collection('houses').stream()
+        import database.user_db as user_db
+        house_ids = user_db.get_all_active_house_ids()
 
-        for house_doc in houses_ref:
-            house_id = house_doc.id
+        for house_id in house_ids:
             print(f"Processing house number: {house_id}")
 
             # fetch the data from the last 14 days
