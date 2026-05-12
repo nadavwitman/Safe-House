@@ -1,22 +1,41 @@
 import atexit
 import os
+from datetime import timedelta
 
 from flask import Flask
+from flask_jwt_extended import JWTManager
+from flask_cors import CORS
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 def create_app():
     app = Flask(__name__)
+
+    app.config['JWT_SECRET_KEY'] = os.environ['JWT_SECRET_KEY']
+    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(minutes=30)
+    app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)
+
+    JWTManager(app)
+    CORS(app)
 
     # Import blueprints locally to avoid circular dependencies
     from app.api.analyze_routes import analyze_bp
     from app.api.config_routes import config_bp
     from app.api.house_routes import house_bp
     from app.api.insights_routes import insights_bp
+    from app.api.auth_routes import auth_bp
+    from app.api.user_routes import user_bp
+    from app.api.admin_routes import admin_bp
 
     app.register_blueprint(analyze_bp)
     app.register_blueprint(config_bp)
     app.register_blueprint(house_bp)
     app.register_blueprint(insights_bp)
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(user_bp)
+    app.register_blueprint(admin_bp)
 
     # Start the weekly insights scheduler only in the main process.
     # In Flask debug mode, Werkzeug spawns a reloader child process and sets
@@ -36,12 +55,12 @@ def _setup_scheduler():
     from app.weekly_summary.report_generator import run_insights_pipeline
 
     def scheduled_weekly_insights():
-        """Generates weekly wellness reports for every registered house."""
+        """Generates weekly wellness reports for every active house."""
         try:
-            house_docs = database.db.collection('houses').stream()
-            house_ids = [doc.id for doc in house_docs]
+            import database.user_db as user_db
+            house_ids = user_db.get_all_active_house_ids()
             if not house_ids:
-                print("[Scheduler] No houses found — skipping weekly insights.")
+                print("[Scheduler] No active houses found — skipping weekly insights.")
                 return
 
             from firebase_admin import firestore as _firestore

@@ -1,10 +1,12 @@
 from flask import Blueprint, request, jsonify
 from app.core.data_buffer import sensor_buffer
+from app.auth.decorators import house_member_required
 
 # Define the blueprint for configuration routing
 config_bp = Blueprint('config', __name__)
 
 @config_bp.route('/api/config', methods=['POST'])
+@house_member_required
 def config_system():
     """
     Endpoint for system configuration (e.g., Vacation Mode)

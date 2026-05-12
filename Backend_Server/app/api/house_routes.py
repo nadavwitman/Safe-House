@@ -1,10 +1,12 @@
 from flask import Blueprint, request, jsonify
 from app.core.house_mask_store import house_mask_store
+from app.auth.decorators import admin_required
 
 house_bp = Blueprint('house', __name__)
 
 
 @house_bp.route('/api/house/sensor-mask', methods=['POST'])
+@admin_required
 def set_sensor_mask():
     data = request.get_json()
     if not data:
