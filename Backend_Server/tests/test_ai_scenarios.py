@@ -21,8 +21,8 @@ import traceback
 
 import pandas as pd
 
-from app.core.weekly_aggregator import aggregate_weekly_metrics
-from app.core.insights_generator import format_compact_prompt, generate_weekly_report
+from app.weekly_summary.aggregator import aggregate_weekly_metrics
+from app.weekly_summary.report_generator import format_compact_prompt, generate_weekly_report
 
 
 # ---------------------------------------------------------------------------

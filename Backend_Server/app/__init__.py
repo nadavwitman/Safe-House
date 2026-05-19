@@ -57,6 +57,8 @@ def _setup_scheduler():
     def scheduled_weekly_insights():
         """Generates weekly wellness reports for every active house."""
         try:
+            from app.weekly_summary.model_manager import run_weekly_mlops_pipeline_scalable
+            run_weekly_mlops_pipeline_scalable()
             import database.user_db as user_db
             house_ids = user_db.get_all_active_house_ids()
             if not house_ids:

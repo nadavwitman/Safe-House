@@ -1,16 +1,23 @@
 import os
-from datetime import datetime, timezone, timedelta
-import pandas as pd
-import firebase_admin
+import time
 import random
+import firebase_admin
+import pandas as pd
+from datetime import datetime, timezone, timedelta
 from firebase_admin import credentials, firestore
-from datetime import datetime, timedelta, timezone
+
 BASE_DIR = os.path.dirname(__file__)
 CRED_PATH = os.path.join(BASE_DIR, 'firebase-credentials.json')
-# Auth loading
-cred = credentials.Certificate(CRED_PATH)
-firebase_admin.initialize_app(cred)
+
+# Initialize Firebase application if not already initialized
+if not firebase_admin._apps:
+    cred = credentials.Certificate(CRED_PATH)
+    firebase_admin.initialize_app(cred, {
+        'storageBucket': 'safe-house-492613.appspot.com'
+    })
+
 db = firestore.client()
+
 
 def get_sensor_mask(house_id='default_house'):
     """Returns the 7-bit sensor mask for the house, defaulting to all-active if not set."""
@@ -54,23 +61,43 @@ def get_last_current_location(house_id='default_house'):
     return None
 
 
+def log_ai_decision(house_id, sensor_id, decision):
+    """
+    Logs the finalized, normalized AI decision into a dedicated subcollection.
+    Essential for historical parsing and the weekly summary generation pipeline.
+    """
+    doc_ref = db.collection('houses').document(house_id).collection('ai_decisions').document()
+    doc_ref.set({
+        'sensor_id': sensor_id,
+        'decision': decision,
+        'time': datetime.now(timezone.utc)
+    })
+
+
 def get_weekly_sensor_data(house_id='default_house'):
-    """Returns all sensor vector readings from the past 7 days for the given house."""
+    """
+    Returns all sensor vector readings from the past 7 days for the given house.
+    Optimized to query filtered subsets from Firestore instead of heavy streaming.
+    """
     cutoff = datetime.now(timezone.utc) - timedelta(days=7)
-    docs = db.collection('houses').document(house_id).collection('sensor_vectors').stream()
+    vectors_ref = db.collection('houses').document(house_id).collection('sensor_vectors')
+    
+    # Query only the required 7 days from the server side
+    docs = vectors_ref.where('time', '>=', cutoff).get()
     results = []
+    
     for doc in docs:
         try:
             d = doc.to_dict()
             t = pd.to_datetime(d.get('time'), utc=True)
-            if t >= cutoff:
-                results.append({
-                    'sensor_vector': d.get('sensor_vector', [0] * 7),
-                    'time': t,
-                    'current_location': d.get('current_location', [0, 0, 0, 0, 0, 0, 1]),
-                })
+            results.append({
+                'sensor_vector': d.get('sensor_vector', [0] * 7),
+                'time': t,
+                'current_location': d.get('current_location', [0, 0, 0, 0, 0, 0, 1]),
+            })
         except Exception:
             continue
+            
     return results
 
 
@@ -104,18 +131,16 @@ def get_weekly_report(house_id):
         return None
     return doc.to_dict().get('weekly_report')
 
+
 def fetch_finetuning_data(house_id='default_house'):
-    """
-   Fetch data from the last 14 days
-    """
+    """Retrieves all data recorded during the last 14 days for model fine-tuning."""
     vectors_ref = db.collection('houses').document(house_id).collection('sensor_vectors')
     cutoff_date = datetime.now(timezone.utc) - timedelta(days=14)
 
-    # Organise the data in a dictionary
     new_docs = vectors_ref.where('time', '>=', cutoff_date).get()
     new_data = [doc.to_dict() for doc in new_docs]
 
-    # Sort by chronological order
+    # Sort documents chronologically by timestamp
     new_data.sort(key=lambda x: x['time'])
 
     return new_data
