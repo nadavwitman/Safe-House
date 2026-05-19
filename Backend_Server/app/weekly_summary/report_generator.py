@@ -128,8 +128,8 @@ def format_compact_prompt(weekly_metrics, house_id):
 # Gemini API call
 # ---------------------------------------------------------------------------
 
-_RETRY_INTERVAL_SECONDS = 10 * 60  # 10 minutes between retries
-_MAX_RETRIES = 10
+_INITIAL_RETRY_DELAY_SECONDS = 5
+_MAX_RETRIES = 3
 
 
 def generate_weekly_report(compact_prompt):
@@ -142,6 +142,7 @@ def generate_weekly_report(compact_prompt):
 
     client = genai.Client(api_key=api_key)
     last_exc = None
+    delay = _INITIAL_RETRY_DELAY_SECONDS
 
     for attempt in range(1, _MAX_RETRIES + 1):
         try:
@@ -160,11 +161,13 @@ def generate_weekly_report(compact_prompt):
             ))
             if not retryable or attempt == _MAX_RETRIES:
                 raise
+            
             print(
-                f"[ReportGenerator] Gemini overloaded (attempt {attempt}/{_MAX_RETRIES}): {exc}. "
-                f"Retrying in {_RETRY_INTERVAL_SECONDS // 60} minutes..."
+                f"[ReportGenerator] Gemini API error (attempt {attempt}/{_MAX_RETRIES}): {exc}. "
+                f"Retrying in {delay} seconds..."
             )
-            time.sleep(_RETRY_INTERVAL_SECONDS)
+            time.sleep(delay)
+            delay *= 2  # Double the wait time for the next attempt
 
     raise last_exc
 
@@ -205,5 +208,6 @@ def run_insights_pipeline(house_id, raw_docs):
 
     compact_prompt = format_compact_prompt(metrics, house_id)
     ai_output      = generate_weekly_report(compact_prompt)
+    database.save_weekly_report(house_id, ai_output)
 
     return metrics, ai_output
