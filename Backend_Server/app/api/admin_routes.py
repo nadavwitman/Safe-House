@@ -4,6 +4,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 import database.user_db as user_db
 from app.auth.decorators import admin_required
 from app.auth.utils import generate_user_id, generate_invite_code, generate_device_token, hash_password
+from app.core.house_mask_store import house_mask_store
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -101,7 +102,12 @@ def get_house(house_id):
     for uid in house.get('user_ids', []):
         u = user_db.get_user_by_id(uid)
         if u:
-            users.append({'user_id': uid, 'username': u.get('username'), 'email': u.get('email')})
+            users.append({
+                'user_id': uid,
+                'username': u.get('username'),
+                'email': u.get('email'),
+                'role': u.get('role', 'user'),
+            })
 
     return jsonify({
         'house_id': house_id,
@@ -110,6 +116,7 @@ def get_house(house_id):
         'emergency_contact_phone': house.get('emergency_contact_phone'),
         'is_active': house.get('is_active', False),
         'invite_code': house.get('invite_code'),
+        'sensor_mask': house_mask_store.get_mask(house_id),
         'users': users,
     }), 200
 

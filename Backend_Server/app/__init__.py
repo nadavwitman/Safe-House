@@ -95,6 +95,40 @@ def _setup_scheduler():
         except Exception as e:
             print(f"[Scheduler] Fatal error in scheduled_weekly_insights: {e}")
 
+    def check_vacation_schedules():
+        """Auto-activates/deactivates vacation mode based on stored schedules."""
+        from datetime import datetime
+        import database.user_db as _user_db
+        from app.core.data_buffer import sensor_buffer
+
+        try:
+            house_ids = _user_db.get_all_active_house_ids()
+            now = datetime.now()
+            for house_id in house_ids:
+                try:
+                    schedule = database.get_vacation_schedule(house_id)
+                    if not schedule:
+                        continue
+                    start = datetime.fromisoformat(
+                        f"{schedule['startDate']}T{schedule['startTime']}")
+                    end = datetime.fromisoformat(
+                        f"{schedule['endDate']}T{schedule['endTime']}")
+                    is_vacation = database.get_vacation_mode(house_id)
+                    if start <= now <= end and not is_vacation:
+                        database.set_vacation_mode(house_id, True)
+                        sensor_buffer.is_active = False
+                        sensor_buffer.clear_house(house_id)
+                        print(f"[Scheduler] Vacation started for house {house_id}")
+                    elif now > end and is_vacation:
+                        database.set_vacation_mode(house_id, False)
+                        database.clear_vacation_schedule(house_id)
+                        sensor_buffer.is_active = True
+                        print(f"[Scheduler] Vacation ended for house {house_id}, schedule cleared")
+                except Exception as e:
+                    print(f"[Scheduler] Error checking vacation for house {house_id}: {e}")
+        except Exception as e:
+            print(f"[Scheduler] Fatal error in check_vacation_schedules: {e}")
+
     scheduler = BackgroundScheduler(daemon=True)
     scheduler.add_job(
         func=scheduled_weekly_insights,
@@ -103,7 +137,15 @@ def _setup_scheduler():
         replace_existing=True,
         misfire_grace_time=3600,  # Fire up to 1h late if server was down at 06:00
     )
+    scheduler.add_job(
+        func=check_vacation_schedules,
+        trigger='interval',
+        minutes=5,
+        id='vacation_schedule_checker',
+        replace_existing=True,
+    )
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown(wait=False))
 
     print("[Scheduler] Weekly insights scheduler started — runs every Sunday at 06:00.")
+    print("[Scheduler] Vacation schedule checker started — runs every 5 minutes.")

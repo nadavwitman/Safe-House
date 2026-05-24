@@ -1,0 +1,108 @@
+/* Safe House — design tokens & base */
+
+:root {
+  /* Background */
+  --bg-cream: #F2EDDF;
+  --bg-soft:  #EDE6D3;
+  --bg-canvas:#E9E1CD;
+
+  /* Surfaces */
+  --card:     #FBF8F0;
+  --card-2:   #FFFFFF;
+  --card-3:   #F6F1E2;
+  --line:     #E2D9C2;
+  --line-2:   #D9CFB5;
+
+  /* Ink */
+  --ink-900:  #2F3A2E;
+  --ink-800:  #3B4A3D;
+  --ink-700:  #4D5E4F;
+  --ink-600:  #61735F;
+  --ink-500:  #82917F;
+  --ink-400:  #9DA89A;
+  --ink-300:  #BCC4B6;
+
+  /* Sage — primary brand */
+  --sage-800: #4F6B53;
+  --sage-700: #6B8B6E;
+  --sage-600: #8FAA8C;
+  --sage-500: #A8C0A0;
+  --sage-400: #BBCFB3;
+  --sage-300: #CFDFC7;
+  --sage-200: #DFEAD6;
+  --sage-100: #EBF1E1;
+  --sage-50:  #F4F6EA;
+
+  /* Status */
+  --ok:        #6B8B6E;
+  --ok-soft:   #DFEAD6;
+  --warn:      #C99544;
+  --warn-soft: #F4E5C2;
+  --alert:     #B95F4A;
+  --alert-soft:#F2D6CB;
+
+  /* Type */
+  --display: "Newsreader", "Cormorant Garamond", Georgia, serif;
+  --ui: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif;
+
+  /* Radii */
+  --r-xs: 8px;
+  --r-sm: 12px;
+  --r-md: 16px;
+  --r-lg: 20px;
+  --r-xl: 28px;
+  --r-pill: 999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(60,72,55,.06), 0 1px 1px rgba(60,72,55,.04);
+  --shadow-md: 0 2px 6px rgba(60,72,55,.06), 0 8px 24px rgba(60,72,55,.06);
+  --shadow-lg: 0 6px 18px rgba(60,72,55,.08), 0 24px 60px rgba(60,72,55,.10);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  font-family: var(--ui);
+  color: var(--ink-900);
+  background: var(--bg-canvas);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Inputs reset for crisp look inside frames */
+input, button, textarea, select {
+  font: inherit;
+  color: inherit;
+}
+
+/* Utility used inside React screens */
+.sh-app {
+  width: 100%;
+  height: 100%;
+  background: var(--bg-cream);
+  color: var(--ink-900);
+  font-family: var(--ui);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.sh-display { font-family: var(--display); font-weight: 500; letter-spacing: -0.01em; }
+.sh-numeric { font-variant-numeric: tabular-nums; }
+
+.sh-scroll { overflow-y: auto; flex: 1; }
+.sh-scroll::-webkit-scrollbar { width: 0; height: 0; }
+
+/* Subtle striped placeholder background */
+.sh-placeholder-stripes {
+  background:
+    repeating-linear-gradient(135deg,
+      rgba(120,140,110,.06) 0 6px,
+      transparent 6px 12px),
+    var(--sage-50);
+}
+
+/* Reusable focus ring */
+.sh-focus:focus { outline: none; box-shadow: 0 0 0 3px rgba(143,170,140,.35); border-color: var(--sage-600) !important; }

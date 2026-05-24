@@ -22,6 +22,8 @@ def get_me():
                 'resident_name': house.get('resident_name'),
                 'address': house.get('address'),
                 'is_active': house.get('is_active', False),
+                'is_vacation': house.get('is_vacation', False),
+                'vacation_schedule': house.get('vacation_schedule'),
             })
 
     return jsonify({
