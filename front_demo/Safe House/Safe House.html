@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Safe House — Design</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="browser-window.jsx"></script>
+<script type="text/babel" src="shared.jsx"></script>
+<script type="text/babel" src="screens-auth.jsx"></script>
+<script type="text/babel" src="screens-dashboard.jsx"></script>
+<script type="text/babel" src="screens-summary.jsx"></script>
+<script type="text/babel" src="screens-alerts.jsx"></script>
+<script type="text/babel" src="screens-profile-admin.jsx"></script>
+
+<script type="text/babel">
+const MW = 390, MH = 844;       // iPhone-ish
+const DW = 1280, DH = 800;      // Desktop browser
+
+// Wrap a mobile screen in the IOSDevice frame
+function MobileFrame({ children, dark = false }) {
+  return <IOSDevice width={MW} height={MH} dark={dark}>{children}</IOSDevice>;
+}
+
+// Wrap a desktop screen in a Chrome window
+function DesktopFrame({ children, path = 'safehouse.app' }) {
+  return (
+    <ChromeWindow
+      width={DW} height={DH}
+      tabs={[{ title: 'Safe House' }, { title: 'Help' }]}
+      url={path}
+    >
+      {children}
+    </ChromeWindow>
+  );
+}
+
+// Mobile artboard padding (small margin around the device)
+const MA = { w: MW + 24, h: MH + 24 };
+const DA = { w: DW + 12, h: DH + 12 };
+
+function App() {
+  return (
+    <DesignCanvas>
+      <DCSection id="auth" title="Authentication" subtitle="Sign Up, Sign In — mobile + desktop, with error states">
+        <DCArtboard id="signup-mobile" label="Sign Up · mobile" width={MA.w} height={MA.h}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+            <MobileFrame><SignUpScreen/></MobileFrame>
+          </div>
+        </DCArtboard>
+        <DCArtboard id="signup-mobile-errors" label="Sign Up · validation errors" width={MA.w} height={MA.h}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+            <MobileFrame><SignUpScreen withErrors/></MobileFrame>
+          </div>
+        </DCArtboard>
+        <DCArtboard id="signin-mobile" label="Sign In · invalid credentials" width={MA.w} height={MA.h}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+            <MobileFrame><SignInScreen withError/></MobileFrame>
+          </div>
+        </DCArtboard>
+        <DCArtboard id="signup-desktop" label="Sign Up · desktop" width={DA.w} height={DA.h}>
+          <DesktopFrame path="safehouse.app/signup"><SignUpScreen desktop/></DesktopFrame>
+        </DCArtboard>
+        <DCArtboard id="signin-desktop" label="Sign In · desktop" width={DA.w} height={DA.h}>
+          <DesktopFrame path="safehouse.app/signin"><SignInScreen desktop/></DesktopFrame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="join" title="Join House" subtitle="Onboarding when the user has no house yet">
+        <DCArtboard id="join-empty-mobile" label="Empty state · mobile" width={MA.w} height={MA.h}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+            <MobileFrame><JoinHouseScreen state="empty"/></MobileFrame>
+          </div>
+        </DCArtboard>
+        <DCArtboard id="join-error-mobile" label="Invalid invite code · mobile" width={MA.w} height={MA.h}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+            <MobileFrame><JoinHouseScreen state="error"/></MobileFrame>
+          </div>
+        </DCArtboard>
+        <DCArtboard id="join-success-mobile" label="Success state · mobile" width={MA.w} height={MA.h}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+            <MobileFrame><JoinHouseScreen state="success"/></MobileFrame>
+          </div>
+        </DCArtboard>
+        <DCArtboard id="join-desktop" label="Empty state · desktop" width={DA.w} height={DA.h}>
+          <DesktopFrame path="safehouse.app/join"><JoinHouseScreen desktop state="empty"/></DesktopFrame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="dashboard" title="Customer Dashboard" subtitle="System status hero, alerts, and sensor grid">
+        <DCArtboard id="dash-clear-mobile" label="All Clear · mobile" width={MA.w} height={MA.h}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+            <MobileFrame><DashboardMobile status="clear"/></MobileFrame>
+          </div>
+        </DCArtboard>
+        <DCArtboard id="dash-warn-mobile" label="Warning · mobile" width={MA.w} height={MA.h}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+            <MobileFrame><DashboardMobile status="warning"/></MobileFrame>
+          </div>
+        </DCArtboard>
+        <DCArtboard id="dash-emerg-mobile" label="Emergency · mobile" width={MA.w} height={MA.h}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+            <MobileFrame><DashboardMobile status="emergency"/></MobileFrame>
+          </div>
+        </DCArtboard>
+        <DCArtboard id="dash-vacation-mobile" label="Vacation Mode · mobile" width={MA.w} height={MA.h}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+            <MobileFrame><DashboardMobile status="vacation"/></MobileFrame>
+          </div>
+        </DCArtboard>
+        <DCArtboard id="dash-empty-mobile" label="No sensor data yet · mobile" width={MA.w} height={MA.h}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+            <MobileFrame><DashboardMobile status="clear" hasData={false}/></MobileFrame>
+          </div>
+        </DCArtboard>
+        <DCArtboard id="dash-clear-desktop" label="All Clear · desktop" width={DA.w} height={DA.h}>
+          <DesktopFrame path="safehouse.app/home"><DashboardDesktop status="clear"/></DesktopFrame>
+        </DCArtboard>
+        <DCArtboard id="dash-emerg-desktop" label="Emergency · desktop" width={DA.w} height={DA.h}>
+          <DesktopFrame path="safehouse.app/home"><DashboardDesktop status="emergency"/></DesktopFrame>
+        </DCArtboard>
+        <DCArtboard id="dash-vacation-desktop" label="Vacation Mode · desktop" width={DA.w} height={DA.h}>
+          <DesktopFrame path="safehouse.app/home"><DashboardDesktop status="vacation"/></DesktopFrame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="summary" title="Weekly Summary" subtitle="Charts, baseline-aware metric cards, AI insights">
+        <DCArtboard id="summary-mobile" label="Cached report · mobile" width={MA.w} height={MA.h}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+            <MobileFrame><SummaryMobile/></MobileFrame>
+          </div>
+        </DCArtboard>
+        <DCArtboard id="summary-mobile-loading" label="Generating report · mobile" width={MA.w} height={MA.h}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+            <MobileFrame><SummaryMobile loading/></MobileFrame>
+          </div>
+        </DCArtboard>
+        <DCArtboard id="summary-desktop" label="Cached report · desktop" width={DA.w} height={DA.h}>
+          <DesktopFrame path="safehouse.app/summary"><SummaryDesktop/></DesktopFrame>
+        </DCArtboard>
+        <DCArtboard id="summary-desktop-empty" label="Insufficient data · desktop" width={DA.w} height={DA.h}>
+          <DesktopFrame path="safehouse.app/summary"><SummaryDesktop emptyKind="insufficient"/></DesktopFrame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="alerts" title="Alerts" subtitle="Last 7 days of notifications — grouped by day, filterable by severity">
+        <DCArtboard id="alerts-mobile" label="Alerts feed · mobile" width={MA.w} height={MA.h}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+            <MobileFrame><AlertsMobile/></MobileFrame>
+          </div>
+        </DCArtboard>
+        <DCArtboard id="alerts-desktop" label="Alerts feed · desktop" width={DA.w} height={DA.h}>
+          <DesktopFrame path="safehouse.app/alerts"><AlertsDesktop/></DesktopFrame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="profile" title="Profile" subtitle="Account, house switcher, vacation mode (with pre-scheduled trips)">
+        <DCArtboard id="profile-mobile" label="Profile · trip scheduled · mobile" width={MA.w} height={MA.h}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+            <MobileFrame><ProfileMobile demoState="scheduled"/></MobileFrame>
+          </div>
+        </DCArtboard>
+        <DCArtboard id="profile-mobile-editing" label="Profile · picking dates · mobile" width={MA.w} height={MA.h}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+            <MobileFrame><ProfileMobile demoState="editing"/></MobileFrame>
+          </div>
+        </DCArtboard>
+        <DCArtboard id="profile-mobile-idle" label="Profile · no trip · mobile" width={MA.w} height={MA.h}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+            <MobileFrame><ProfileMobile demoState="idle"/></MobileFrame>
+          </div>
+        </DCArtboard>
+        <DCArtboard id="profile-mobile-live" label="Profile · trip in progress · mobile" width={MA.w} height={MA.h}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+            <MobileFrame><ProfileMobile demoState="live"/></MobileFrame>
+          </div>
+        </DCArtboard>
+        <DCArtboard id="profile-desktop" label="Profile · trip in progress · desktop" width={DA.w} height={DA.h}>
+          <DesktopFrame path="safehouse.app/profile"><ProfileDesktop demoState="live"/></DesktopFrame>
+        </DCArtboard>
+        <DCArtboard id="profile-desktop-scheduled" label="Profile · trip scheduled · desktop" width={DA.w} height={DA.h}>
+          <DesktopFrame path="safehouse.app/profile"><ProfileDesktop demoState="scheduled"/></DesktopFrame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="admin-search" title="Admin · House Search & Management" subtitle="Search by ID, manage credentials, users, and sensor mask">
+        <DCArtboard id="admin-search-found-desktop" label="Found · desktop" width={DA.w} height={DA.h}>
+          <DesktopFrame path="safehouse.app/admin/search"><AdminSearchScreen desktop state="found"/></DesktopFrame>
+        </DCArtboard>
+        <DCArtboard id="admin-search-empty-desktop" label="No result · desktop" width={DA.w} height={DA.h}>
+          <DesktopFrame path="safehouse.app/admin/search"><AdminSearchScreen desktop state="noresult"/></DesktopFrame>
+        </DCArtboard>
+        <DCArtboard id="admin-search-found-mobile" label="Found · mobile" width={MA.w} height={MA.h}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+            <MobileFrame><AdminSearchScreen state="found"/></MobileFrame>
+          </div>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="admin-create" title="Admin · Create House" subtitle="Form, validation, and the one-time credentials reveal">
+        <DCArtboard id="admin-create-form-desktop" label="Form · desktop" width={DA.w} height={DA.h}>
+          <DesktopFrame path="safehouse.app/admin/new"><AdminCreateScreen desktop state="form"/></DesktopFrame>
+        </DCArtboard>
+        <DCArtboard id="admin-create-error-desktop" label="Validation error · desktop" width={DA.w} height={DA.h}>
+          <DesktopFrame path="safehouse.app/admin/new"><AdminCreateScreen desktop state="error"/></DesktopFrame>
+        </DCArtboard>
+        <DCArtboard id="admin-create-success-desktop" label="Credentials issued · desktop" width={DA.w} height={DA.h}>
+          <DesktopFrame path="safehouse.app/admin/new"><AdminCreateScreen desktop state="success"/></DesktopFrame>
+        </DCArtboard>
+        <DCArtboard id="admin-create-form-mobile" label="Form · mobile" width={MA.w} height={MA.h}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+            <MobileFrame><AdminCreateScreen state="form"/></MobileFrame>
+          </div>
+        </DCArtboard>
+        <DCArtboard id="admin-create-error-mobile" label="Validation error · mobile" width={MA.w} height={MA.h}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+            <MobileFrame><AdminCreateScreen state="error"/></MobileFrame>
+          </div>
+        </DCArtboard>
+        <DCArtboard id="admin-create-success-mobile" label="Credentials issued · mobile" width={MA.w} height={MA.h}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+            <MobileFrame><AdminCreateScreen state="success"/></MobileFrame>
+          </div>
+        </DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
