@@ -1,14 +1,14 @@
 #pragma once
 
 // ─── WiFi ────────────────────────────────────────────────────────────────────
-#define WIFI_SSID       "ahronson"
-#define WIFI_PASSWORD   "0506323011"
+#define WIFI_SSID       "your_wifi_ssid"
+#define WIFI_PASSWORD   "your_wifi_password"
 
 // ─── Server ──────────────────────────────────────────────────────────────────
 // Use your EC2 Elastic IP or domain, e.g. "http://13.48.x.x:5000/api/analyze"
-#define SERVER_URL      "http://192.168.1.105:5000/api/analyze"
-#define DEVICE_TOKEN    "ad2d104757d739ad0cca0214ad77cb38c169caee2be4cb9ed968ccdb3ebef702"
-#define HOUSE_ID        "c059c5e4-8fd8-4d5f-8065-d43c1cb82f96"
+#define SERVER_URL      "http://YOUR_SERVER_IP:5000/api/analyze"
+#define DEVICE_TOKEN    "your_64_char_device_token_here" // From admin dashboard
+#define HOUSE_ID        "your_house_id_here" // From admin dashboard
 
 // ─── Timezone ────────────────────────────────────────────────────────────────
 // POSIX TZ string — the model relies on local hour/day, so this must be correct.
@@ -41,7 +41,7 @@
 // Reed: closes to GND         → interrupt on FALLING edge (INPUT_PULLUP)
 //
 // Set to true for PIR, false for reed switch (affects interrupt edge + pull mode)
-#define SENSOR_IS_PIR   { false, true, true, true, false, true, true }
+#define SENSOR_IS_PIR   { true, true, true, true, true, true, true }
 //                         Door  Kit  Bath Toilet Meds  Bed  Living
 
 // ─── Timing ──────────────────────────────────────────────────────────────────
