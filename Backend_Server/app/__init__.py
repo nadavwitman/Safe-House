@@ -37,12 +37,12 @@ def create_app():
     app.register_blueprint(user_bp)
     app.register_blueprint(admin_bp)
 
-    # Start the weekly insights scheduler only in the main process.
-    # In Flask debug mode, Werkzeug spawns a reloader child process and sets
-    # WERKZEUG_RUN_MAIN="true" there. We start the scheduler only in that child
-    # (or when not in debug mode at all) to avoid double-scheduling.
-    if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug:
-        _setup_scheduler()
+    # ENABLE_SCHEDULER=false on the API machine (Machine 1) — the dedicated
+    # scheduler machine (Machine 2) runs its own APScheduler process via
+    # scheduler_main.py, which avoids double-scheduling when scaling the API.
+    if os.environ.get("ENABLE_SCHEDULER", "true").lower() == "true":
+        if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug:
+            _setup_scheduler()
 
     return app
 
