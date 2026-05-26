@@ -32,7 +32,7 @@ def _validate_device_token(house_id, token):
 @analyze_bp.route('/api/analyze', methods=['POST'])
 def analyze_data():
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True)
         if not data:
             return jsonify({"error": "No data provided"}), 400
 
