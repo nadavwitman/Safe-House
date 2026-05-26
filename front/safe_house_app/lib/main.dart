@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'theme/colors.dart';
 import 'services/auth_state.dart';
 import 'services/user_service.dart';
+import 'services/notification_service.dart';
 import 'screens/auth/sign_in_screen.dart';
 import 'screens/auth/join_house_screen.dart';
 import 'screens/customer/customer_shell.dart';
 import 'screens/admin/admin_shell.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,6 +22,7 @@ void main() async {
     statusBarIconBrightness: Brightness.dark,
   ));
 
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await AuthState.instance.loadFromStorage();
 
   if (AuthState.instance.accessToken != null) {
@@ -25,6 +32,8 @@ void main() async {
       await AuthState.instance.clear();
     }
   }
+
+  await NotificationService.initialize();
 
   runApp(const SafeHouseApp());
 }
@@ -91,11 +100,13 @@ class SafeHouseApp extends StatelessWidget {
         ),
         splashColor: Colors.transparent,
         highlightColor: Colors.transparent,
-        pageTransitionsTheme: const PageTransitionsTheme(builders: {
-          TargetPlatform.android: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.windows: CupertinoPageTransitionsBuilder(),
-        }),
+        pageTransitionsTheme: kIsWeb
+            ? const PageTransitionsTheme()
+            : PageTransitionsTheme(builders: {
+                TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+                TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+                TargetPlatform.windows: CupertinoPageTransitionsBuilder(),
+              }),
       ),
       home: home,
     );

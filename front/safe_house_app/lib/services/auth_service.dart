@@ -1,5 +1,6 @@
 import 'api_client.dart';
 import 'auth_state.dart';
+import 'notification_service.dart';
 
 class AuthService {
   static Future<void> signIn(String email, String password) async {
@@ -39,9 +40,11 @@ class AuthService {
       role: data['role'] as String? ?? 'user',
       houses: const [],
     );
+    await NotificationService.registerToken();
   }
 
   static Future<void> signOut() async {
+    await NotificationService.unregisterToken();
     try {
       await ApiClient.post('/api/auth/signout');
     } catch (_) {}

@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
 from firebase_admin import storage
-from database.database import db
+from database.database import db, fetch_finetuning_data
 from datetime import datetime, timezone
 from app.core.house_mask_store import house_mask_store
 from app.core.ai_handler import fine_tune_house_model
@@ -160,9 +160,8 @@ def auto_train_house_model(house_id):
     """
     print(f"[MLOps Worker] Initiating automated retraining sequence for house: {house_id}")
     try:
-        # 1. Fetch raw timeline logs from Firestore (last 14 days logic should be applied here/in DB query)
-        sensor_ref = db.collection('houses').document(house_id).collection('sensor_data').get()
-        raw_training_data = [doc.to_dict() for doc in sensor_ref]
+        # 1. Fetch the last 14 days of sensor vectors from the correct Firestore subcollection
+        raw_training_data = fetch_finetuning_data(house_id)
         
         # 2. Fetch house mask
         house_mask = house_mask_store.get_mask(house_id)

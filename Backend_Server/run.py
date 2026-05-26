@@ -3,6 +3,9 @@ import atexit
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+# Prevent __init__.py from starting its own scheduler — run.py manages scheduling here.
+os.environ.setdefault('ENABLE_SCHEDULER', 'false')
+
 from app import create_app
 
 import database.database as database

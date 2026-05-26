@@ -75,6 +75,8 @@ class ApiClient {
     }
   }
 
+  static Future<void> refreshTokens() => _tryRefresh();
+
   static Future<void> _tryRefresh() async {
     final refresh = AuthState.instance.refreshToken;
     if (refresh == null) {

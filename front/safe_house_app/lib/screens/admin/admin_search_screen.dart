@@ -24,7 +24,7 @@ const _sensorList = [
   _SensorDef('living', Icons.weekend_outlined, 'Living Room', 'sage'),
 ];
 
-enum _SearchState { empty, searching, noresult, found, error }
+enum _Mode { loading, list, loadingDetail, detail, listError }
 
 // ── Screen ───────────────────────────────────────────────────────
 class AdminSearchScreen extends StatefulWidget {
@@ -37,51 +37,93 @@ class AdminSearchScreen extends StatefulWidget {
 
 class _AdminSearchScreenState extends State<AdminSearchScreen> {
   final _controller = TextEditingController();
-  _SearchState _state = _SearchState.empty;
-  Map<String, dynamic>? _house;
+
+  _Mode _mode = _Mode.loading;
+  List<Map<String, dynamic>> _allHouses = [];
+  List<Map<String, dynamic>> _filtered = [];
+  Map<String, dynamic>? _detailHouse;
   String? _errorMsg;
 
-  Future<void> _search() async {
-    final q = _controller.text.trim();
-    if (q.isEmpty) return;
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_onQueryChanged);
+    _loadList();
+  }
+
+  Future<void> _loadList() async {
+    setState(() => _mode = _Mode.loading);
+    try {
+      final houses = await AdminService.listHouses();
+      if (mounted) {
+        setState(() {
+          _allHouses = houses;
+          _filtered = houses;
+          _mode = _Mode.list;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _mode = _Mode.listError;
+          _errorMsg = 'Could not load houses. Check your connection.';
+        });
+      }
+    }
+  }
+
+  void _onQueryChanged() {
+    if (_mode != _Mode.list) return;
+    final q = _controller.text.trim().toLowerCase();
     setState(() {
-      _state = _SearchState.searching;
-      _house = null;
+      _filtered = q.isEmpty
+          ? _allHouses
+          : _allHouses.where((h) {
+              return (h['resident_name'] as String? ?? '')
+                      .toLowerCase()
+                      .contains(q) ||
+                  (h['house_id'] as String? ?? '')
+                      .toLowerCase()
+                      .contains(q) ||
+                  (h['address'] as String? ?? '').toLowerCase().contains(q);
+            }).toList();
+    });
+  }
+
+  Future<void> _selectHouse(String houseId) async {
+    setState(() {
+      _mode = _Mode.loadingDetail;
       _errorMsg = null;
     });
     try {
-      final house = await AdminService.getHouse(q);
+      final house = await AdminService.getHouse(houseId);
       if (mounted) {
         setState(() {
-          _house = house;
-          _state = _SearchState.found;
+          _detailHouse = house;
+          _mode = _Mode.detail;
         });
       }
     } on ApiException catch (e) {
-      if (!mounted) return;
-      if (e.statusCode == 404) {
-        setState(() => _state = _SearchState.noresult);
-      } else {
+      if (mounted) {
         setState(() {
-          _state = _SearchState.error;
+          _mode = _Mode.list;
           _errorMsg = e.message;
         });
       }
     } catch (_) {
       if (mounted) {
         setState(() {
-          _state = _SearchState.error;
-          _errorMsg = 'Could not reach the server. Check your connection.';
+          _mode = _Mode.list;
+          _errorMsg = 'Could not load house details.';
         });
       }
     }
   }
 
-  void _reset() {
+  void _backToList() {
     setState(() {
-      _controller.clear();
-      _state = _SearchState.empty;
-      _house = null;
+      _detailHouse = null;
+      _mode = _Mode.list;
       _errorMsg = null;
     });
   }
@@ -107,6 +149,7 @@ class _AdminSearchScreenState extends State<AdminSearchScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header
             Padding(
               padding: const EdgeInsets.fromLTRB(22, 24, 22, 14),
               child: Row(
@@ -146,87 +189,224 @@ class _AdminSearchScreenState extends State<AdminSearchScreen> {
                 ],
               ),
             ),
+
+            // Body
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
-                child: Column(
+              child: _buildBody(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    switch (_mode) {
+      case _Mode.loading:
+        return const Center(child: CircularProgressIndicator());
+
+      case _Mode.listError:
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.cloud_off, size: 48, color: AppColors.ink400),
+                const SizedBox(height: 16),
+                Text(_errorMsg ?? 'An error occurred.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.manrope(
+                        fontSize: 14, color: AppColors.ink600)),
+                const SizedBox(height: 20),
+                AppButton(
+                  variant: AppButtonVariant.primary,
+                  onPressed: _loadList,
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        );
+
+      case _Mode.loadingDetail:
+        return const Center(child: CircularProgressIndicator());
+
+      case _Mode.detail:
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Back link
+              GestureDetector(
+                onTap: _backToList,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.arrow_back_ios,
+                          size: 13, color: AppColors.sage600),
+                      const SizedBox(width: 4),
+                      Text('All houses',
+                          style: GoogleFonts.manrope(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.sage600)),
+                    ],
+                  ),
+                ),
+              ),
+              _FoundCard(house: _detailHouse!),
+            ],
+          ),
+        );
+
+      case _Mode.list:
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Search field
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.card2,
+                  border: Border.all(color: AppColors.line2, width: 1.5),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
                   children: [
-                    // Search row
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: AppColors.card2,
-                              border: Border.all(
-                                  color: AppColors.line2, width: 1.5),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: Row(
-                              children: [
-                                const Padding(
-                                  padding:
-                                      EdgeInsets.symmetric(horizontal: 14),
-                                  child: Icon(Icons.search,
-                                      color: AppColors.ink500, size: 20),
-                                ),
-                                Expanded(
-                                  child: TextField(
-                                    controller: _controller,
-                                    onSubmitted: (_) => _search(),
-                                    textCapitalization:
-                                        TextCapitalization.characters,
-                                    style: GoogleFonts.manrope(
-                                        fontSize: 14,
-                                        color: AppColors.ink900),
-                                    decoration: InputDecoration(
-                                      hintText: 'Enter house ID',
-                                      hintStyle: GoogleFonts.manrope(
-                                          fontSize: 14,
-                                          color: AppColors.ink400),
-                                      border: InputBorder.none,
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                              vertical: 13),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        AppButton(
-                          variant: AppButtonVariant.primary,
-                          leading: _state == _SearchState.searching
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white))
-                              : const Icon(Icons.search, size: 16),
-                          onPressed: _state == _SearchState.searching
-                              ? null
-                              : _search,
-                          child: const Text('Search'),
-                        ),
-                      ],
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 14),
+                      child: Icon(Icons.search,
+                          color: AppColors.ink500, size: 20),
                     ),
-                    const SizedBox(height: 14),
-                    if (_state == _SearchState.noresult)
-                      _NoResultCard(
-                        onRetry: _reset,
-                        onCreateNew: widget.onNavigateToCreate,
+                    Expanded(
+                      child: TextField(
+                        controller: _controller,
+                        style: GoogleFonts.manrope(
+                            fontSize: 14, color: AppColors.ink900),
+                        decoration: InputDecoration(
+                          hintText: 'Search by name, address or ID…',
+                          hintStyle: GoogleFonts.manrope(
+                              fontSize: 14, color: AppColors.ink400),
+                          border: InputBorder.none,
+                          contentPadding:
+                              const EdgeInsets.symmetric(vertical: 13),
+                        ),
                       ),
-                    if (_state == _SearchState.error)
-                      _ErrorCard(message: _errorMsg ?? 'An error occurred.', onRetry: _reset),
-                    if (_state == _SearchState.found && _house != null)
-                      _FoundCard(house: _house!),
+                    ),
+                    if (_controller.text.isNotEmpty)
+                      GestureDetector(
+                        onTap: () => _controller.clear(),
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 14),
+                          child: Icon(Icons.close,
+                              color: AppColors.ink400, size: 18),
+                        ),
+                      ),
                   ],
                 ),
               ),
+              const SizedBox(height: 6),
+
+              // Count / error inline
+              Padding(
+                padding: const EdgeInsets.only(left: 4, bottom: 10),
+                child: _errorMsg != null
+                    ? Text(_errorMsg!,
+                        style: GoogleFonts.manrope(
+                            fontSize: 12, color: const Color(0xFF7A3727)))
+                    : Text(
+                        _filtered.isEmpty
+                            ? 'No houses match'
+                            : '${_filtered.length} house${_filtered.length == 1 ? '' : 's'}',
+                        style: GoogleFonts.manrope(
+                            fontSize: 12, color: AppColors.ink500)),
+              ),
+
+              // House list
+              if (_filtered.isEmpty && _allHouses.isNotEmpty)
+                _NoMatchCard(onCreateNew: widget.onNavigateToCreate)
+              else
+                for (int i = 0; i < _filtered.length; i++) ...[
+                  _HouseSummaryTile(
+                    house: _filtered[i],
+                    onTap: () => _selectHouse(
+                        _filtered[i]['house_id'] as String? ?? ''),
+                  ),
+                  if (i < _filtered.length - 1) const SizedBox(height: 10),
+                ],
+            ],
+          ),
+        );
+    }
+  }
+}
+
+// ── House summary tile (list view) ───────────────────────────────
+class _HouseSummaryTile extends StatelessWidget {
+  final Map<String, dynamic> house;
+  final VoidCallback onTap;
+  const _HouseSummaryTile({required this.house, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final name = house['resident_name'] as String? ?? '—';
+    final address = house['address'] as String? ?? '';
+    final userCount = house['user_count'] as int? ?? 0;
+    final isActive = house['is_active'] as bool? ?? false;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          border: Border.all(color: AppColors.line),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            const IconWell(
+                tone: 'sage',
+                size: 44,
+                child: Icon(Icons.home_outlined, size: 20)),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name,
+                      style: GoogleFonts.newsreader(
+                          fontSize: 17,
+                          color: AppColors.ink900,
+                          fontWeight: FontWeight.w500)),
+                  if (address.isNotEmpty)
+                    Text(address,
+                        style: GoogleFonts.manrope(
+                            fontSize: 12, color: AppColors.ink500)),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      AppTag(
+                        label: isActive ? 'Active' : 'Inactive',
+                        tone: isActive ? 'sage' : 'cream',
+                        icon: StatusDot(tone: isActive ? 'ok' : 'off'),
+                      ),
+                      const SizedBox(width: 8),
+                      Text('$userCount user${userCount == 1 ? '' : 's'}',
+                          style: GoogleFonts.manrope(
+                              fontSize: 11.5, color: AppColors.ink500)),
+                    ],
+                  ),
+                ],
+              ),
             ),
+            const Icon(Icons.chevron_right,
+                size: 20, color: AppColors.ink400),
           ],
         ),
       ),
@@ -234,11 +414,10 @@ class _AdminSearchScreenState extends State<AdminSearchScreen> {
   }
 }
 
-// ── No-result card ───────────────────────────────────────────────
-class _NoResultCard extends StatelessWidget {
-  final VoidCallback? onRetry;
+// ── No-match card (filtered list is empty) ───────────────────────
+class _NoMatchCard extends StatelessWidget {
   final VoidCallback? onCreateNew;
-  const _NoResultCard({this.onRetry, this.onCreateNew});
+  const _NoMatchCard({this.onCreateNew});
 
   @override
   Widget build(BuildContext context) {
@@ -251,97 +430,41 @@ class _NoResultCard extends StatelessWidget {
             height: 72,
             decoration: BoxDecoration(
               color: AppColors.bgSoft,
-              border:
-                  Border.all(color: AppColors.line2),
+              border: Border.all(color: AppColors.line2),
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.search, size: 28, color: AppColors.ink500),
           ),
           const SizedBox(height: 14),
-          Text('No house found with this ID',
+          Text('No houses match',
               style: GoogleFonts.newsreader(
                   fontSize: 22,
                   color: AppColors.ink900,
                   fontWeight: FontWeight.w500)),
           const SizedBox(height: 8),
           Text(
-            "Double-check the ID for typos, or create a new house if one hasn't been set up yet.",
+            'Try a different name or address, or create a new house.',
             textAlign: TextAlign.center,
             style: GoogleFonts.manrope(
                 fontSize: 14, color: AppColors.ink600, height: 1.55),
           ),
-          const SizedBox(height: 18),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              AppButton(
-                variant: AppButtonVariant.outline,
-                buttonSize: AppButtonSize.sm,
-                onPressed: onRetry,
-                child: const Text('Try again'),
-              ),
-              const SizedBox(width: 10),
-              AppButton(
-                variant: AppButtonVariant.primary,
-                buttonSize: AppButtonSize.sm,
-                leading: const Icon(Icons.add, size: 14),
-                onPressed: onCreateNew,
-                child: const Text('Create new house'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Error card ───────────────────────────────────────────────────
-class _ErrorCard extends StatelessWidget {
-  final String message;
-  final VoidCallback? onRetry;
-  const _ErrorCard({required this.message, this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.alertSoft,
-        border: Border.all(color: const Color(0xFFE6BFB1)),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.error_outline, size: 18, color: Color(0xFF7A3727)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(message,
-                    style: GoogleFonts.manrope(
-                        fontSize: 13.5,
-                        color: const Color(0xFF7A3727),
-                        height: 1.5)),
-                const SizedBox(height: 10),
-                AppButton(
-                  variant: AppButtonVariant.ghost,
-                  buttonSize: AppButtonSize.sm,
-                  onPressed: onRetry,
-                  child: const Text('Clear'),
-                ),
-              ],
+          if (onCreateNew != null) ...[
+            const SizedBox(height: 18),
+            AppButton(
+              variant: AppButtonVariant.primary,
+              buttonSize: AppButtonSize.sm,
+              leading: const Icon(Icons.add, size: 14),
+              onPressed: onCreateNew,
+              child: const Text('Create new house'),
             ),
-          ),
+          ],
         ],
       ),
     );
   }
 }
 
-// ── Found card ───────────────────────────────────────────────────
+// ── Found card (full detail) ─────────────────────────────────────
 class _FoundCard extends StatefulWidget {
   final Map<String, dynamic> house;
   const _FoundCard({required this.house});
@@ -452,8 +575,7 @@ class _FoundCardState extends State<_FoundCard> {
 
   @override
   Widget build(BuildContext context) {
-    final residentName =
-        widget.house['resident_name'] as String? ?? '—';
+    final residentName = widget.house['resident_name'] as String? ?? '—';
     final address = widget.house['address'] as String?;
 
     return AppCard(
@@ -500,7 +622,10 @@ class _FoundCardState extends State<_FoundCard> {
                   ),
                 ),
                 const SizedBox(width: 10),
-                AppTag(label: 'Active', tone: 'sage', icon: StatusDot(tone: 'ok')),
+                AppTag(
+                    label: 'Active',
+                    tone: 'sage',
+                    icon: StatusDot(tone: 'ok')),
               ],
             ),
           ),
@@ -513,10 +638,7 @@ class _FoundCardState extends State<_FoundCard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Credentials
-                CopyChip(
-                    label: 'Invite code',
-                    value: _inviteCode,
-                    mono: false),
+                CopyChip(label: 'Invite code', value: _inviteCode, mono: false),
                 const SizedBox(height: 12),
                 CopyChip(label: 'Device token', value: _deviceToken),
                 const SizedBox(height: 14),
@@ -552,15 +674,11 @@ class _FoundCardState extends State<_FoundCard> {
                 const SizedBox(height: 22),
 
                 // Users
-                Row(
-                  children: [
-                    Text('Active users · ${_users.length}',
-                        style: GoogleFonts.newsreader(
-                            fontSize: 17,
-                            color: AppColors.ink900,
-                            fontWeight: FontWeight.w500)),
-                  ],
-                ),
+                Text('Active users · ${_users.length}',
+                    style: GoogleFonts.newsreader(
+                        fontSize: 17,
+                        color: AppColors.ink900,
+                        fontWeight: FontWeight.w500)),
                 const SizedBox(height: 10),
                 if (_users.isEmpty)
                   Text('No users joined yet.',
@@ -569,8 +687,8 @@ class _FoundCardState extends State<_FoundCard> {
                 for (final u in _users) ...[
                   _UserRow(
                     user: u,
-                    removing: _removingUsers.contains(
-                        u['user_id'] as String? ?? ''),
+                    removing:
+                        _removingUsers.contains(u['user_id'] as String? ?? ''),
                     onRemove: () =>
                         _removeUser(u['user_id'] as String? ?? ''),
                   ),
@@ -745,7 +863,8 @@ class _SensorRow extends StatelessWidget {
                     style: GoogleFonts.manrope(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w600,
-                      color: enabled ? AppColors.sage700 : AppColors.ink500,
+                      color:
+                          enabled ? AppColors.sage700 : AppColors.ink500,
                     ),
                   ),
                 ],

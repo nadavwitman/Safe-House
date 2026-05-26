@@ -29,7 +29,7 @@ const _sensors = [
 String _relTime(DateTime? t) {
   if (t == null) return 'No data yet';
   final diff = DateTime.now().difference(t);
-  if (diff.inSeconds < 60) return 'Just now';
+  if (diff.isNegative || diff.inSeconds < 60) return 'Just now';
   if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
   if (diff.inHours < 24) return '${diff.inHours}h ago';
   return '${diff.inDays}d ago';
@@ -43,27 +43,57 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen>
+    with WidgetsBindingObserver {
   // sensor index (0-6) → last time that sensor had value 1
   final Map<int, DateTime> _lastActivity = {};
   Timer? _timer;
+  bool _refreshing = false;
+
+  // How often to poll the backend for new sensor activity. The screen lives
+  // inside an IndexedStack, so this keeps ticking across tab switches but is
+  // paused while the app is backgrounded.
+  static const _pollInterval = Duration(seconds: 5);
 
   @override
   void initState() {
     super.initState();
-    _refresh();
-    _timer = Timer.periodic(const Duration(minutes: 1), (_) => _refresh());
+    WidgetsBinding.instance.addObserver(this);
+    _startPolling();
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _stopPolling();
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _startPolling();
+    } else {
+      _stopPolling();
+    }
+  }
+
+  void _startPolling() {
+    _timer?.cancel();
+    _refresh();
+    _timer = Timer.periodic(_pollInterval, (_) => _refresh());
+  }
+
+  void _stopPolling() {
+    _timer?.cancel();
+    _timer = null;
+  }
+
   Future<void> _refresh() async {
+    if (_refreshing) return; // skip overlapping polls on slow networks
     final houseId = AuthState.instance.activeHouseId;
     if (houseId == null) return;
+    _refreshing = true;
     try {
       final data = await HouseService.getRecentEvents(houseId);
       final readings = data['readings'] as List<dynamic>? ?? [];
@@ -85,10 +115,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
         if (found.length == 7) break;
       }
-      if (mounted) setState(() => _lastActivity..clear()..addAll(found));
+      if (!mounted) return;
+      if (_hasChanged(found)) {
+        setState(() => _lastActivity..clear()..addAll(found));
+      } else {
+        // Same data, but relative-time labels ("2m ago") still need to age.
+        setState(() {});
+      }
     } catch (_) {
       // silently ignore — stale data stays on screen
+    } finally {
+      _refreshing = false;
     }
+  }
+
+  bool _hasChanged(Map<int, DateTime> next) {
+    if (_lastActivity.length != next.length) return true;
+    for (final entry in next.entries) {
+      if (_lastActivity[entry.key] != entry.value) return true;
+    }
+    return false;
   }
 
   @override
