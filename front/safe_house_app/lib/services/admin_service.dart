@@ -41,6 +41,10 @@ class AdminService {
     await ApiClient.delete('/api/admin/house/$houseId/user/$userId');
   }
 
+  static Future<void> deleteHouse(String houseId) async {
+    await ApiClient.delete('/api/admin/house/$houseId');
+  }
+
   static Future<void> setSensorMask(
       String houseId, List<int> mask) async {
     await ApiClient.post('/api/house/sensor-mask', {

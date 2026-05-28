@@ -22,7 +22,17 @@ void main() async {
     statusBarIconBrightness: Brightness.dark,
   ));
 
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // Firebase Messaging is not supported on Linux desktop.
+  final bool firebaseSupported = kIsWeb ||
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS ||
+      defaultTargetPlatform == TargetPlatform.macOS ||
+      defaultTargetPlatform == TargetPlatform.windows;
+
+  if (firebaseSupported) {
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  }
+
   await AuthState.instance.loadFromStorage();
 
   if (AuthState.instance.accessToken != null) {
@@ -33,7 +43,9 @@ void main() async {
     }
   }
 
-  await NotificationService.initialize();
+  if (firebaseSupported) {
+    await NotificationService.initialize();
+  }
 
   runApp(const SafeHouseApp());
 }

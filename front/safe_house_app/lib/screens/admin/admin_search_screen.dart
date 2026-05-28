@@ -258,7 +258,13 @@ class _AdminSearchScreenState extends State<AdminSearchScreen> {
                   ),
                 ),
               ),
-              _FoundCard(house: _detailHouse!),
+              _FoundCard(
+                house: _detailHouse!,
+                onDeleted: () {
+                  _backToList();
+                  _loadList();
+                },
+              ),
             ],
           ),
         );
@@ -467,7 +473,8 @@ class _NoMatchCard extends StatelessWidget {
 // ── Found card (full detail) ─────────────────────────────────────
 class _FoundCard extends StatefulWidget {
   final Map<String, dynamic> house;
-  const _FoundCard({required this.house});
+  final VoidCallback? onDeleted;
+  const _FoundCard({required this.house, this.onDeleted});
 
   @override
   State<_FoundCard> createState() => _FoundCardState();
@@ -482,6 +489,7 @@ class _FoundCardState extends State<_FoundCard> {
   bool _regenLoading = false;
   bool _rotateLoading = false;
   bool _maskSaving = false;
+  bool _deleteLoading = false;
   final Set<String> _removingUsers = {};
 
   @override
@@ -553,6 +561,52 @@ class _FoundCardState extends State<_FoundCard> {
       }
     } catch (_) {
       if (mounted) setState(() => _removingUsers.remove(userId));
+    }
+  }
+
+  Future<void> _deleteHouse() async {
+    final residentName =
+        widget.house['resident_name'] as String? ?? 'this house';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Delete house?',
+            style: GoogleFonts.newsreader(
+                fontSize: 22,
+                fontWeight: FontWeight.w500,
+                color: AppColors.ink900)),
+        content: Text(
+          'Are you sure you want to permanently delete $residentName and all its data? This cannot be undone.',
+          style:
+              GoogleFonts.manrope(fontSize: 14, color: AppColors.ink700, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('Cancel',
+                style: GoogleFonts.manrope(color: AppColors.ink600)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('Delete permanently',
+                style: GoogleFonts.manrope(
+                    color: const Color(0xFF7A3727),
+                    fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _deleteLoading = true);
+    try {
+      await AdminService.deleteHouse(_houseId);
+      if (mounted) widget.onDeleted?.call();
+    } catch (_) {
+      if (mounted) {
+        setState(() => _deleteLoading = false);
+        _showSnack('Failed to delete house. Please try again.');
+      }
     }
   }
 
@@ -738,6 +792,29 @@ class _FoundCardState extends State<_FoundCard> {
                     child: const Text('Save sensor mask'),
                   ),
                 ],
+                const SizedBox(height: 28),
+                Container(height: 1, color: AppColors.line),
+                const SizedBox(height: 20),
+                _deleteLoading
+                    ? const Center(
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : AppButton(
+                        variant: AppButtonVariant.ghost,
+                        leading: const Icon(Icons.delete_outline,
+                            size: 16, color: Color(0xFF7A3727)),
+                        onPressed: _deleteHouse,
+                        child: Text(
+                          'Delete house',
+                          style: GoogleFonts.manrope(
+                              color: const Color(0xFF7A3727),
+                              fontWeight: FontWeight.w600),
+                        ),
+                      ),
               ],
             ),
           ),
