@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "704800483063",
+    "project_id": "safe-house-492613",
+    "storage_bucket": "safe-house-492613.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:704800483063:android:8729230c6afaad1b65d5f2",
+        "android_client_info": {
+          "package_name": "com.safehouse.safe_house_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCYIdm1kse-EeJ66GhDfUyp73hw3Idicdw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -121,6 +121,16 @@ def get_house(house_id):
     }), 200
 
 
+@admin_bp.route('/api/admin/house/<house_id>', methods=['DELETE'])
+@admin_required
+def delete_house(house_id):
+    house = user_db.get_house(house_id)
+    if not house:
+        return jsonify({'error': 'House not found'}), 404
+    user_db.delete_house(house_id)
+    return jsonify({'status': 'success'}), 200
+
+
 @admin_bp.route('/api/admin/house/<house_id>/user/<user_id>', methods=['DELETE'])
 @admin_required
 def remove_user_from_house(house_id, user_id):

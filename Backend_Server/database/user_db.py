@@ -154,6 +154,25 @@ def get_admin_houses(admin_user_id):
     return [doc.to_dict() for doc in docs]
 
 
+def delete_house(house_id):
+    """Hard-deletes a house and all its subcollection data from Firestore."""
+    house = get_house(house_id)
+    if not house:
+        return
+
+    # Remove house reference from every member user
+    for uid in house.get('user_ids', []):
+        remove_house_from_user(uid, house_id)
+
+    # Delete subcollections (Firestore does not cascade-delete children)
+    house_ref = db.collection('houses').document(house_id)
+    for subcollection in ('sensor_vectors', 'ai_decisions'):
+        for doc in house_ref.collection(subcollection).list_documents():
+            doc.delete()
+
+    house_ref.delete()
+
+
 def get_all_active_house_ids():
     """Returns IDs of all houses with is_active == True."""
     docs = db.collection('houses').where('is_active', '==', True).stream()

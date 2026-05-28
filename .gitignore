@@ -20,6 +20,7 @@ build/
 *.hex
 *.ino.cpp
 build/
+IoT_Hardware/SafeHouse/config.h
 
 # --- General/OS ---
 .DS_Store

@@ -535,10 +535,10 @@ class _VacationCardState extends State<_VacationCard> {
                     const SizedBox(height: 4),
                     AppTag(
                       label: paused
-                          ? 'Paused'
+                          ? 'On'
                           : widget.schedule != null
                               ? 'Scheduled'
-                              : 'Active',
+                              : 'Off',
                       tone: paused ? 'warn' : 'sage',
                       icon: StatusDot(tone: paused ? 'warn' : 'ok'),
                     ),

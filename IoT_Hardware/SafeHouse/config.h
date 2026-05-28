@@ -7,8 +7,8 @@
 // ─── Server ──────────────────────────────────────────────────────────────────
 // Use your EC2 Elastic IP or domain, e.g. "http://13.48.x.x:5000/api/analyze"
 #define SERVER_URL      "http://YOUR_SERVER_IP:5000/api/analyze"
-#define DEVICE_TOKEN    "your_64_char_device_token_here"   // From admin dashboard
-#define HOUSE_ID        "your_house_id_here"               // From admin dashboard
+#define DEVICE_TOKEN    "your_64_char_device_token_here" // From admin dashboard
+#define HOUSE_ID        "your_house_id_here" // From admin dashboard
 
 // ─── Timezone ────────────────────────────────────────────────────────────────
 // POSIX TZ string — the model relies on local hour/day, so this must be correct.
@@ -41,8 +41,8 @@
 // Reed: closes to GND         → interrupt on FALLING edge (INPUT_PULLUP)
 //
 // Set to true for PIR, false for reed switch (affects interrupt edge + pull mode)
-#define SENSOR_IS_PIR   { true, true, true, true, false, true, true }
-//                        Door  Kit  Bath Toilet Meds  Bed  Living
+#define SENSOR_IS_PIR   { true, true, true, true, true, true, true }
+//                         Door  Kit  Bath Toilet Meds  Bed  Living
 
 // ─── Timing ──────────────────────────────────────────────────────────────────
 #define SEND_INTERVAL_MS    60000UL   // 1 minute between POSTs (match server buffer cadence)

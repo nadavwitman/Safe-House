@@ -7,7 +7,7 @@ from datetime import datetime, timezone, timedelta
 from firebase_admin import credentials, firestore
 
 BASE_DIR = os.path.dirname(__file__)
-CRED_PATH = os.path.join(BASE_DIR, 'firebase-credentials.json')
+CRED_PATH = os.environ.get('FIREBASE_CREDENTIALS_PATH') or os.path.join(BASE_DIR, 'firebase-credentials.json')
 
 # Initialize Firebase application if not already initialized
 if not firebase_admin._apps:
@@ -42,10 +42,21 @@ def log_vector_reading(data, house_id='default_house'):
     Saves a sensor vector reading to a house's subcollection in Firestore.
     Structure: houses -> {house_id} -> sensor_vectors -> {auto_generated_doc}
     """
+    raw_time = data.get('time')
+    if isinstance(raw_time, str):
+        try:
+            parsed_time = datetime.fromisoformat(raw_time).replace(tzinfo=timezone.utc)
+        except ValueError:
+            parsed_time = datetime.now(timezone.utc)
+    elif isinstance(raw_time, datetime):
+        parsed_time = raw_time if raw_time.tzinfo else raw_time.replace(tzinfo=timezone.utc)
+    else:
+        parsed_time = datetime.now(timezone.utc)
+
     doc_ref = db.collection('houses').document(house_id).collection('sensor_vectors').document()
     doc_ref.set({
         'sensor_vector': data.get('sensor_vector'),
-        'time': data.get('time'),
+        'time': parsed_time,
         'current_location': data.get('current_location'),
     })
     db.collection('houses').document(house_id).set(
@@ -63,9 +74,17 @@ def get_last_current_location(house_id='default_house'):
 
 def get_recent_sensor_events(house_id, limit=50):
     """Returns the most recent sensor_vector readings for a house, newest first."""
+    # where('time', '>=', cutoff) with a datetime value silently excludes any
+    # legacy documents where 'time' was stored as a plain string — Firestore's
+    # type-aware comparison only matches the same type. This prevents the
+    # mixed-type ordering bug where strings sort before timestamps in DESC order.
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=90)
     vectors_ref = (
         db.collection('houses').document(house_id)
         .collection('sensor_vectors')
+        .where('time', '>=', cutoff)
+        .where('time', '<=', now)
         .order_by('time', direction=firestore.Query.DESCENDING)
         .limit(limit)
     )
