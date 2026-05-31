@@ -17,6 +17,9 @@ def get_me():
     for hid in user.get('house_ids', []):
         house = user_db.get_house(hid)
         if house:
+            mask = house.get('sensor_mask')
+            if not (isinstance(mask, list) and len(mask) == 7):
+                mask = [1, 1, 1, 1, 1, 1, 1]
             houses.append({
                 'house_id': hid,
                 'resident_name': house.get('resident_name'),
@@ -24,6 +27,7 @@ def get_me():
                 'is_active': house.get('is_active', False),
                 'is_vacation': house.get('is_vacation', False),
                 'vacation_schedule': house.get('vacation_schedule'),
+                'sensor_mask': mask,
             })
 
     return jsonify({

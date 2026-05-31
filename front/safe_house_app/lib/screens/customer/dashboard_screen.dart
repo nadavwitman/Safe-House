@@ -97,6 +97,10 @@ class _DashboardScreenState extends State<DashboardScreen>
     try {
       final data = await HouseService.getRecentEvents(houseId);
       final readings = data['readings'] as List<dynamic>? ?? [];
+      final serverVacation = data['is_vacation'] as bool? ?? false;
+      if (serverVacation != AuthState.instance.vacationMode) {
+        await AuthState.instance.setVacationMode(serverVacation);
+      }
       final Map<int, DateTime> found = {};
       for (final reading in readings) {
         final vector = (reading['sensor_vector'] as List<dynamic>?) ?? [];
@@ -152,6 +156,14 @@ class _DashboardScreenState extends State<DashboardScreen>
         activeHouse?['resident_name'] as String? ?? 'your house';
     final isVacation = auth.vacationMode;
     final status = isVacation ? HouseStatus.vacation : HouseStatus.clear;
+    final rawMask = activeHouse?['sensor_mask'] as List<dynamic>?;
+    final mask = (rawMask != null && rawMask.length == 7)
+        ? rawMask.map((v) => v == 1 || v == true).toList()
+        : List.filled(7, true);
+    final activeSensors = [
+      for (int i = 0; i < _sensors.length; i++)
+        if (mask[i]) (index: i, sensor: _sensors[i]),
+    ];
 
     return Scaffold(
       backgroundColor: AppColors.bgCream,
@@ -220,13 +232,13 @@ class _DashboardScreenState extends State<DashboardScreen>
                                 color: AppColors.ink900,
                                 fontWeight: FontWeight.w500)),
                         const Spacer(),
-                        Text('${_sensors.length} monitored',
+                        Text('${activeSensors.length} monitored',
                             style: GoogleFonts.manrope(
                                 fontSize: 12, color: AppColors.ink500)),
                       ],
                     ),
                     const SizedBox(height: 10),
-                    for (int i = 0; i < _sensors.length; i += 2) ...[
+                    for (int i = 0; i < activeSensors.length; i += 2) ...[
                       if (i > 0) const SizedBox(height: 10),
                       IntrinsicHeight(
                         child: Row(
@@ -234,16 +246,16 @@ class _DashboardScreenState extends State<DashboardScreen>
                           children: [
                             Expanded(
                                 child: _SensorCard(
-                                    sensor: _sensors[i],
+                                    sensor: activeSensors[i].sensor,
                                     paused: isVacation,
-                                    lastActivity: _lastActivity[i])),
+                                    lastActivity: _lastActivity[activeSensors[i].index])),
                             const SizedBox(width: 10),
                             Expanded(
-                              child: i + 1 < _sensors.length
+                              child: i + 1 < activeSensors.length
                                   ? _SensorCard(
-                                      sensor: _sensors[i + 1],
+                                      sensor: activeSensors[i + 1].sensor,
                                       paused: isVacation,
-                                      lastActivity: _lastActivity[i + 1])
+                                      lastActivity: _lastActivity[activeSensors[i + 1].index])
                                   : const SizedBox(),
                             ),
                           ],
@@ -520,7 +532,11 @@ class _SensorCard extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               Text(
-                paused ? 'Monitoring paused' : _relTime(lastActivity),
+                paused
+                    ? (lastActivity != null
+                        ? 'Last seen ${_relTime(lastActivity)}'
+                        : 'No data yet')
+                    : _relTime(lastActivity),
                 style: GoogleFonts.manrope(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w600,

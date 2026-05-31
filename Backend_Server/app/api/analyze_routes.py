@@ -17,6 +17,11 @@ DEFAULT_LOCATION = [0, 0, 0, 0, 0, 0, 1]
 # In-memory cache for validated device tokens: {house_id: token}
 _device_token_cache = {}
 
+# Alert cooldown: {house_id: last_alert_datetime} — prevents duplicate alerts within 30 min
+from datetime import datetime, timedelta
+_last_alert_time: dict = {}
+_ALERT_COOLDOWN = timedelta(minutes=30)
+
 
 def _validate_device_token(house_id, token):
     if not token:
@@ -70,8 +75,7 @@ def analyze_data():
         ai_decision = "Normal"
 
         # Add to buffer and persist (now with resolved current_location)
-        if getattr(sensor_buffer, 'is_active', True):
-            sensor_buffer.add_reading(data)
+        sensor_buffer.add_reading(data)
         database.log_vector_reading(data, house_id)
 
         # Aquire all current buffer data for processing
@@ -119,9 +123,14 @@ def analyze_data():
             final_decision = "Normal"       # Standard baseline routine
 
 
-        # Trigger push notifications only for Warning and Emergency states
+        # Trigger push notifications only for Warning and Emergency states,
+        # with a 30-minute cooldown to avoid flooding the alert history.
         if final_decision in ["Warning", "Emergency"]:
-            # Persist the normalized decision for the weekly summary pipeline
+            now = datetime.now()
+            last = _last_alert_time.get(house_id)
+            if last and (now - last) < _ALERT_COOLDOWN:
+                return jsonify({"status": "success", "decision": final_decision, "fcm_status": "Cooldown"}), 200
+            _last_alert_time[house_id] = now
             database.log_ai_decision(house_id, ai_sensor, final_decision)
             notifications.trigger_fcm_alert(ai_sensor, final_decision, house_id)
             return jsonify({

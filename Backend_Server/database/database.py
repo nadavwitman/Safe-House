@@ -58,6 +58,7 @@ def log_vector_reading(data, house_id='default_house'):
         'sensor_vector': data.get('sensor_vector'),
         'time': parsed_time,
         'current_location': data.get('current_location'),
+        'is_vacation': get_vacation_mode(house_id),
     })
     db.collection('houses').document(house_id).set(
         {'last_current_location': data.get('current_location')}, merge=True
@@ -121,6 +122,28 @@ def set_vacation_mode(house_id, is_vacation: bool):
     )
 
 
+def get_offline_alert_sent_at(house_id):
+    """Returns the datetime an offline alert was last sent, or None."""
+    doc = db.collection('houses').document(house_id).get()
+    if doc.exists:
+        val = doc.to_dict().get('offline_alert_sent_at')
+        if isinstance(val, datetime):
+            return val
+    return None
+
+
+def set_offline_alert_sent_at(house_id, ts):
+    db.collection('houses').document(house_id).set(
+        {'offline_alert_sent_at': ts}, merge=True
+    )
+
+
+def clear_offline_alert_sent_at(house_id):
+    db.collection('houses').document(house_id).set(
+        {'offline_alert_sent_at': None}, merge=True
+    )
+
+
 def set_vacation_schedule(house_id, schedule: dict):
     """Persists a vacation schedule {startDate, startTime, endDate, endTime} to the house document."""
     db.collection('houses').document(house_id).set(
@@ -152,8 +175,46 @@ def log_ai_decision(house_id, sensor_id, decision):
     doc_ref.set({
         'sensor_id': sensor_id,
         'decision': decision,
+        'type': 'ai',
         'time': datetime.now(timezone.utc)
     })
+
+
+def log_device_offline_alert(house_id, minutes_silent):
+    """Logs a device-offline alert so it appears in the in-app alert history."""
+    doc_ref = db.collection('houses').document(house_id).collection('ai_decisions').document()
+    doc_ref.set({
+        'sensor_id': 'Device',
+        'decision': 'Offline',
+        'type': 'device_offline',
+        'minutes_silent': minutes_silent,
+        'time': datetime.now(timezone.utc)
+    })
+
+
+def get_alert_history(house_id, limit=50):
+    """Returns the most recent alerts (AI + device-offline) for a house, newest first."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+    docs = (
+        db.collection('houses').document(house_id)
+        .collection('ai_decisions')
+        .where('time', '>=', cutoff)
+        .order_by('time', direction=firestore.Query.DESCENDING)
+        .limit(limit)
+        .get()
+    )
+    results = []
+    for doc in docs:
+        d = doc.to_dict()
+        t = d.get('time')
+        results.append({
+            'sensor_id': d.get('sensor_id'),
+            'decision': d.get('decision'),
+            'type': d.get('type', 'ai'),
+            'minutes_silent': d.get('minutes_silent'),
+            'time': t.isoformat() if hasattr(t, 'isoformat') else str(t),
+        })
+    return results
 
 
 def get_weekly_sensor_data(house_id='default_house'):
@@ -215,14 +276,16 @@ def get_weekly_report(house_id):
 
 
 def fetch_finetuning_data(house_id='default_house'):
-    """Retrieves all data recorded during the last 14 days for model fine-tuning."""
+    """Retrieves non-vacation data recorded during the last 14 days for model fine-tuning.
+    Vacation-period readings are excluded so the model learns only the resident's real routine."""
     vectors_ref = db.collection('houses').document(house_id).collection('sensor_vectors')
     cutoff_date = datetime.now(timezone.utc) - timedelta(days=14)
 
     new_docs = vectors_ref.where('time', '>=', cutoff_date).get()
-    new_data = [doc.to_dict() for doc in new_docs]
+    new_data = [
+        doc.to_dict() for doc in new_docs
+        if not doc.to_dict().get('is_vacation', False)
+    ]
 
-    # Sort documents chronologically by timestamp
     new_data.sort(key=lambda x: x['time'])
-
     return new_data

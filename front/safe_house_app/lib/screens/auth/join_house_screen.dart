@@ -20,9 +20,14 @@ class _JoinHouseScreenState extends State<JoinHouseScreen> {
   Map<String, dynamic>? _joinResult;
 
   Future<void> _join() async {
-    setState(() => _error = null);
-    if (_code.trim().isEmpty) return;
-    setState(() => _loading = true);
+    if (_code.trim().isEmpty) {
+      setState(() => _error = 'Please enter an invite code.');
+      return;
+    }
+    setState(() {
+      _error = null;
+      _loading = true;
+    });
     try {
       final result = await UserService.joinHouse(_code);
       if (mounted) {

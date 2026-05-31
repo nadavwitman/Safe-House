@@ -41,7 +41,12 @@ def create_app():
     # scheduler machine (Machine 2) runs its own APScheduler process via
     # scheduler_main.py, which avoids double-scheduling when scaling the API.
     if os.environ.get("ENABLE_SCHEDULER", "true").lower() == "true":
-        if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug:
+        # With use_reloader=False (or production), WERKZEUG_RUN_MAIN is never
+        # set — start the scheduler directly. With reloader enabled, start only
+        # in the child process to avoid running it twice.
+        reloader_active = os.environ.get("WERKZEUG_RUN_MAIN") is not None
+        is_reloader_child = os.environ.get("WERKZEUG_RUN_MAIN") == "true"
+        if not reloader_active or is_reloader_child:
             _setup_scheduler()
 
     return app
@@ -116,13 +121,13 @@ def _setup_scheduler():
                     is_vacation = database.get_vacation_mode(house_id)
                     if start <= now <= end and not is_vacation:
                         database.set_vacation_mode(house_id, True)
-                        sensor_buffer.is_active = False
+                        sensor_buffer.pause_house(house_id)
                         sensor_buffer.clear_house(house_id)
                         print(f"[Scheduler] Vacation started for house {house_id}")
                     elif now > end and is_vacation:
                         database.set_vacation_mode(house_id, False)
                         database.clear_vacation_schedule(house_id)
-                        sensor_buffer.is_active = True
+                        sensor_buffer.resume_house(house_id)
                         print(f"[Scheduler] Vacation ended for house {house_id}, schedule cleared")
                 except Exception as e:
                     print(f"[Scheduler] Error checking vacation for house {house_id}: {e}")
