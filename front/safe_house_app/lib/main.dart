@@ -13,7 +13,6 @@ import 'screens/customer/customer_shell.dart';
 import 'screens/admin/admin_shell.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
