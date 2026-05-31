@@ -2,6 +2,31 @@ from firebase_admin import messaging
 import database.user_db as user_db
 
 
+def trigger_device_offline_alert(house_id, resident_name, minutes_silent):
+    """
+    Sends a push notification when the ESP32 has not reported for too long.
+    """
+    title = "Sensor hasn't checked in"
+    body = (
+        f"No signal from {resident_name}'s home for the past {minutes_silent} minutes. "
+        f"Please make sure the Safe House device is powered on and connected to the internet."
+    )
+    tokens = user_db.get_house_fcm_tokens(house_id)
+    if not tokens:
+        print(f'[FCM] No registered tokens for house {house_id} — offline alert not sent.')
+        return False
+    notification = messaging.Notification(title=title, body=body)
+    message = messaging.MulticastMessage(notification=notification, tokens=tokens)
+    try:
+        response = messaging.send_each_for_multicast(message)
+        print(f'[FCM] Offline alert sent to {response.success_count}/{len(tokens)} devices for house {house_id}.')
+        _cleanup_invalid_tokens(response, tokens, house_id)
+        return response.success_count > 0
+    except Exception as e:
+        print(f'[FCM] Error sending offline alert for house {house_id}: {e}')
+        return False
+
+
 def trigger_fcm_alert(sensor_name, severity, house_id):
     """
     Sends a push notification to all users monitoring the given house.

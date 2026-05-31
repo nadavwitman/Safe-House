@@ -73,3 +73,12 @@ def get_weekly_report(house_id):
         "metrics": report.get("metrics"),
         "ai_output": report.get("ai_output"),
     }), 200
+
+
+@insights_bp.route('/api/insights/alerts/<house_id>', methods=['GET'])
+@house_member_required
+def get_alerts(house_id):
+    """Returns the recent alert history (AI anomalies + device-offline) for a house."""
+    limit = min(int(request.args.get('limit', 50)), 100)
+    alerts = database.get_alert_history(house_id, limit=limit)
+    return jsonify({'alerts': alerts}), 200

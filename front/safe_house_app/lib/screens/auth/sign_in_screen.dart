@@ -22,13 +22,24 @@ class _SignInScreenState extends State<SignInScreen> {
   String _email = '';
   String _password = '';
   bool _loading = false;
+  bool _submitted = false;
   String? _error;
 
+  static bool _isValidEmail(String v) =>
+      RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v);
+
+  String? get _emailError {
+    if (!_submitted) return null;
+    if (_email.isEmpty) return 'Email is required.';
+    if (!_isValidEmail(_email)) return 'Please enter a valid email address.';
+    return null;
+  }
+  String? get _passwordError =>
+      _submitted && _password.isEmpty ? 'Password is required.' : null;
+
   Future<void> _signIn() async {
-    if (_email.isEmpty || _password.isEmpty) {
-      setState(() => _error = 'Please enter your email and password.');
-      return;
-    }
+    setState(() => _submitted = true);
+    if (_emailError != null || _passwordError != null) return;
     setState(() {
       _loading = true;
       _error = null;
@@ -147,6 +158,7 @@ class _SignInScreenState extends State<SignInScreen> {
                   placeholder: 'you@email.com',
                   keyboardType: TextInputType.emailAddress,
                   onChanged: (v) => setState(() => _email = v),
+                  error: _emailError,
                 ),
                 const SizedBox(height: 14),
                 AppInput(
@@ -155,6 +167,7 @@ class _SignInScreenState extends State<SignInScreen> {
                   placeholder: 'Your password',
                   isPassword: true,
                   onChanged: (v) => setState(() => _password = v),
+                  error: _passwordError,
                 ),
                 const SizedBox(height: 20),
                 AppButton(

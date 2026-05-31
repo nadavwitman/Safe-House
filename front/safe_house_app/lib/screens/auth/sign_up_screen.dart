@@ -21,8 +21,17 @@ class _SignUpScreenState extends State<SignUpScreen> {
   String? _error;
   bool _submitted = false;
 
-  String? get _emailError =>
-      _submitted && _email.isEmpty ? 'Email is required.' : null;
+  static bool _isValidEmail(String v) =>
+      RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v);
+
+  String? get _usernameError =>
+      _submitted && _username.isEmpty ? 'Username is required.' : null;
+  String? get _emailError {
+    if (!_submitted) return null;
+    if (_email.isEmpty) return 'Email is required.';
+    if (!_isValidEmail(_email)) return 'Please enter a valid email address.';
+    return null;
+  }
   String? get _pwError => _submitted && _password.length < 6
       ? 'Password must be at least 6 characters.'
       : null;
@@ -139,6 +148,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   icon: const Icon(Icons.person_outline),
                   placeholder: 'mara_b',
                   onChanged: (v) => setState(() => _username = v),
+                  error: _usernameError,
                 ),
                 const SizedBox(height: 14),
                 AppInput(

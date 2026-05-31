@@ -19,14 +19,25 @@ def config_system():
     house_id = config_data.get('house_id', 'default_house')
 
     if mode == "Vacation":
-        sensor_buffer.is_active = False
+        sensor_buffer.pause_house(house_id)
         sensor_buffer.clear_house(house_id)
         database.set_vacation_mode(house_id, True)
         return jsonify({"status": "success", "mode": "Vacation", "model_updated": False}), 200
 
     elif mode == "Normal":
-        sensor_buffer.is_active = True
+        sensor_buffer.resume_house(house_id)
         database.set_vacation_mode(house_id, False)
+        # Only clear a schedule that already started — don't delete future trips.
+        from datetime import datetime
+        schedule = database.get_vacation_schedule(house_id)
+        if schedule:
+            try:
+                start = datetime.fromisoformat(
+                    f"{schedule['startDate']}T{schedule['startTime']}")
+                if start <= datetime.now():
+                    database.clear_vacation_schedule(house_id)
+            except Exception:
+                pass
         return jsonify({"status": "success", "mode": "Normal", "model_updated": True}), 200
 
     return jsonify({"status": "success", "message": "Configuration updated"}), 200
@@ -44,6 +55,19 @@ def set_vacation_schedule():
         if not schedule.get(field):
             return jsonify({'error': f'{field} is required in schedule'}), 400
     database.set_vacation_schedule(house_id, schedule)
+    # Immediately activate if we're already within the scheduled window.
+    from datetime import datetime
+    try:
+        start = datetime.fromisoformat(f"{schedule['startDate']}T{schedule['startTime']}")
+        end = datetime.fromisoformat(f"{schedule['endDate']}T{schedule['endTime']}")
+        now = datetime.now()
+        if start <= now <= end:
+            database.set_vacation_mode(house_id, True)
+            from app.core.data_buffer import sensor_buffer
+            sensor_buffer.pause_house(house_id)
+            sensor_buffer.clear_house(house_id)
+    except Exception:
+        pass
     return jsonify({'status': 'success'}), 200
 
 
@@ -55,4 +79,6 @@ def clear_vacation_schedule():
     if not house_id:
         return jsonify({'error': 'house_id is required'}), 400
     database.clear_vacation_schedule(house_id)
+    database.set_vacation_mode(house_id, False)
+    sensor_buffer.resume_house(house_id)
     return jsonify({'status': 'success'}), 200

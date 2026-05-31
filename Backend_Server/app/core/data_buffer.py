@@ -6,7 +6,24 @@ class SensorDataBuffer:
         self.threshold = hours * 60
         # Dictionary to store a separate deque for each house_id
         self.buffers = {}
-        self.is_active = True
+        # Per-house pause set — houses listed here will not buffer new readings
+        self._paused_houses: set = set()
+
+    @property
+    def is_active(self):
+        """Legacy global flag — True if no houses are paused (kept for compatibility)."""
+        return len(self._paused_houses) == 0
+
+    @is_active.setter
+    def is_active(self, value):
+        """Legacy setter — kept for compatibility; has no effect per-house."""
+        pass
+
+    def pause_house(self, house_id):
+        self._paused_houses.add(house_id)
+
+    def resume_house(self, house_id):
+        self._paused_houses.discard(house_id)
 
     def _get_or_create_buffer(self, house_id):
         """ Internal helper to ensure each house has its own dedicated queue """
@@ -15,12 +32,12 @@ class SensorDataBuffer:
         return self.buffers[house_id]
 
     def add_reading(self, data):
-        """ 
+        """
         Adds new data to the specific buffer of the house.
         Automatically drops the oldest reading when it reaches 360 items.
         """
-        if self.is_active:
-            house_id = data.get('house_id', 'default_house')
+        house_id = data.get('house_id', 'default_house')
+        if house_id not in self._paused_houses:
             house_queue = self._get_or_create_buffer(house_id)
             house_queue.append(data)
 

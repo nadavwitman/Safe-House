@@ -12,7 +12,8 @@ def get_recent_events(house_id):
     """Returns the most recent sensor readings for the dashboard activity feed."""
     limit = min(int(request.args.get('limit', 50)), 100)
     readings = database.get_recent_sensor_events(house_id, limit=limit)
-    return jsonify({'readings': readings}), 200
+    is_vacation = database.get_vacation_mode(house_id)
+    return jsonify({'readings': readings, 'is_vacation': is_vacation}), 200
 
 
 @house_bp.route('/api/house/sensor-mask', methods=['POST'])
