@@ -79,13 +79,11 @@ def get_recent_sensor_events(house_id, limit=50):
     # legacy documents where 'time' was stored as a plain string — Firestore's
     # type-aware comparison only matches the same type. This prevents the
     # mixed-type ordering bug where strings sort before timestamps in DESC order.
-    now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(days=90)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=90)
     vectors_ref = (
         db.collection('houses').document(house_id)
         .collection('sensor_vectors')
         .where('time', '>=', cutoff)
-        .where('time', '<=', now)
         .order_by('time', direction=firestore.Query.DESCENDING)
         .limit(limit)
     )
