@@ -1,8 +1,8 @@
 #pragma once
 
 // ─── WiFi ────────────────────────────────────────────────────────────────────
-#define WIFI_SSID       "Yael"
-#define WIFI_PASSWORD   "0544219013"
+#define WIFI_SSID       "insert-wifi-network-name"
+#define WIFI_PASSWORD   "insert-wifi-password"
 
 // ─── Server ──────────────────────────────────────────────────────────────────
 #define SERVER_URL      "http://16.164.45.100:5000/api/analyze"
