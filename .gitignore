@@ -33,3 +33,6 @@ Backend_Server/app/firebase-credentials.json
 
 # --- AI Model ---
 *.csv
+CleanKey.pem
+SafeHouseKey.pem
+SafeHouseKey.pem:Zone.Identifier

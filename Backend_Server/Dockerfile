@@ -17,6 +17,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
 # Copy application source (secrets are injected at runtime, not baked in)
 COPY app/       app/
 COPY database/  database/
+COPY AI_Model/  AI_Model/
 COPY wsgi.py    .
 
 EXPOSE 5000

@@ -7,7 +7,7 @@ from app.core.data_preprocessing import run_preprocessing_pipeline
 import torch.optim as optim
 
 BASE_DIR = os.path.dirname(__file__)
-MODEL_PATH = os.path.join(BASE_DIR, "../../../AI_Model/lstm_safe_house_model.pth")
+MODEL_PATH = os.path.join(BASE_DIR, "../../AI_Model/lstm_safe_house_model.pth")
 
 # Updated thresholds based on Colab test results (0.00004 normal vs 0.28 anomaly)
 EMERGENCY_THRESHOLD = 0.15

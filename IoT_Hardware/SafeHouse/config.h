@@ -1,19 +1,19 @@
 #pragma once
 
 // ─── WiFi ────────────────────────────────────────────────────────────────────
-#define WIFI_SSID       "your_wifi_ssid"
-#define WIFI_PASSWORD   "your_wifi_password"
+#define WIFI_SSID       "Yael"
+#define WIFI_PASSWORD   "0544219013"
 
 // ─── Server ──────────────────────────────────────────────────────────────────
 // Use your EC2 Elastic IP or domain, e.g. "http://13.48.x.x:5000/api/analyze"
-#define SERVER_URL      "http://YOUR_SERVER_IP:5000/api/analyze"
-#define DEVICE_TOKEN    "your_64_char_device_token_here" // From admin dashboard
-#define HOUSE_ID        "your_house_id_here" // From admin dashboard
+#define SERVER_URL      "http://16.164.45.100:5000/api/analyze"
+#define DEVICE_TOKEN    "c88129178b182d11afb452dd5c8af58d938dab252515f438b4f0e7645115f4af" // From admin dashboard
+#define HOUSE_ID        "412ede6a-7810-496d-a223-49a6b8514011" // From admin dashboard
 
 // ─── Timezone ────────────────────────────────────────────────────────────────
 // POSIX TZ string — the model relies on local hour/day, so this must be correct.
 // Israel Standard Time: "IST-2" | US Eastern: "EST5EDT,M3.2.0,M11.1.0" | UTC: "UTC0"
-#define TIMEZONE        "IST-2"
+#define TIMEZONE        "UTC0"
 #define NTP_SERVER_1    "pool.ntp.org"
 #define NTP_SERVER_2    "time.nist.gov"
 

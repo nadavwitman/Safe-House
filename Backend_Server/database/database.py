@@ -45,11 +45,16 @@ def log_vector_reading(data, house_id='default_house'):
     raw_time = data.get('time')
     if isinstance(raw_time, str):
         try:
-            parsed_time = datetime.fromisoformat(raw_time).replace(tzinfo=timezone.utc)
+            # Python < 3.11 doesn't support the Z suffix in fromisoformat
+            normalised = raw_time.replace('Z', '+00:00')
+            dt = datetime.fromisoformat(normalised)
+            # If the string has no timezone info the ESP32 sent local time, not UTC.
+            # Use server time so we never store a future timestamp.
+            parsed_time = dt.astimezone(timezone.utc) if dt.tzinfo else datetime.now(timezone.utc)
         except ValueError:
             parsed_time = datetime.now(timezone.utc)
     elif isinstance(raw_time, datetime):
-        parsed_time = raw_time if raw_time.tzinfo else raw_time.replace(tzinfo=timezone.utc)
+        parsed_time = raw_time.astimezone(timezone.utc) if raw_time.tzinfo else datetime.now(timezone.utc)
     else:
         parsed_time = datetime.now(timezone.utc)
 
@@ -79,13 +84,11 @@ def get_recent_sensor_events(house_id, limit=50):
     # legacy documents where 'time' was stored as a plain string — Firestore's
     # type-aware comparison only matches the same type. This prevents the
     # mixed-type ordering bug where strings sort before timestamps in DESC order.
-    now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(days=90)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=90)
     vectors_ref = (
         db.collection('houses').document(house_id)
         .collection('sensor_vectors')
         .where('time', '>=', cutoff)
-        .where('time', '<=', now)
         .order_by('time', direction=firestore.Query.DESCENDING)
         .limit(limit)
     )

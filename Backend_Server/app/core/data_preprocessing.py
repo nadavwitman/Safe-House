@@ -8,7 +8,7 @@ import torch
 
 # Define the path to save/load the scaler object
 # This path goes up from 'core', up from 'app', into 'AI_Model'
-SCALER_PATH = os.path.join(os.path.dirname(__file__), "../../../AI_Model/scaler.pkl")
+SCALER_PATH = os.path.join(os.path.dirname(__file__), "../../AI_Model/scaler.pkl")
 
 # This function will receive the sensors vector from the ESP32 and will transform it into a panda's data frame
 def format_sensor_data(raw_data):
@@ -31,7 +31,9 @@ def format_sensor_data(raw_data):
 
     # Handle Time-Series columns
     if 'time' in df.columns:
-        df['time'] = pandas.to_datetime(df['time'])
+        time_series = pandas.to_datetime(df['time'], utc=True)
+        time_series = time_series.dt.tz_convert('Asia/Jerusalem')
+        df['time'] = time_series
     else:
         # Fallback to current server time if missing
         current_time = datetime.now()
