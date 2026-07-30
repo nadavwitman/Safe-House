@@ -123,7 +123,11 @@ def remove_user_from_house(house_id, user_id):
 
 
 def activate_house(house_id):
-    db.collection('houses').document(house_id).set({'is_active': True}, merge=True)
+    # activated_at is the reference point for the sensor-health check: a sensor that
+    # has never fired is measured from here, giving a fresh install its grace window.
+    db.collection('houses').document(house_id).set(
+        {'is_active': True, 'activated_at': datetime.now(timezone.utc)}, merge=True
+    )
 
 
 def update_house_device_token(house_id, token):

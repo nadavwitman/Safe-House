@@ -9,21 +9,22 @@ os.environ.setdefault('ENABLE_SCHEDULER', 'false')
 from app import create_app
 
 import database.database as database
-from app.core.ai_handler import fine_tune_house_model
+# Single source of truth — the health checks live in the app package so they ship in
+# the Docker image (this file does not). Imported here only for the local dev server.
+from app.core.device_health import check_device_connectivity, check_sensor_health
 
 app = create_app()
 
 def scheduled_fine_tuning_job():
-    """Fine tune the .pth file every 2 weeks at 3 AM."""
+    """Fine-tune every 2 weeks at 3 AM and PERSIST the updated models to Firebase Storage.
+
+    Delegates to the MLOps pipeline (download current model → fine-tune → upload → bump the
+    fine-tune counter → invalidate the RAM cache) instead of training and discarding the result.
+    """
     print("[03:00 AM] Starting automatic Weight Interpolation fine-tuning...")
     try:
-        import database.user_db as user_db
-        house_ids = user_db.get_all_active_house_ids()
-        for house_id in house_ids:
-            print(f"Processing house number: {house_id}")
-            mask = database.get_sensor_mask(house_id)
-            new_training_data = database.fetch_finetuning_data(house_id)
-            fine_tune_house_model(house_id, new_training_data, mask)
+        from app.weekly_summary.model_manager import run_weekly_mlops_pipeline_scalable
+        run_weekly_mlops_pipeline_scalable()
         print("Nightly fine-tuning completed successfully for all houses.")
     except Exception as e:
         print(f"Error during scheduled fine-tuning: {e}")
@@ -63,64 +64,6 @@ def check_vacation_schedules():
         print(f"[Scheduler] Fatal error in check_vacation_schedules: {e}")
 
 
-OFFLINE_THRESHOLD_MINUTES = 30
-
-
-def check_device_connectivity():
-    """Alerts family members once when an ESP32 has been silent for 30+ minutes.
-    Uses Firestore to persist alert state — survives server restarts."""
-    from datetime import datetime, timezone, timedelta
-    import database.user_db as user_db
-    from app.core import notifications
-
-    try:
-        house_ids = user_db.get_all_active_house_ids()
-        now = datetime.now(timezone.utc)
-        threshold = timedelta(minutes=OFFLINE_THRESHOLD_MINUTES)
-
-        for house_id in house_ids:
-            try:
-                if database.get_vacation_mode(house_id):
-                    continue
-
-                readings = database.get_recent_sensor_events(house_id, limit=1)
-                if not readings:
-                    continue
-
-                last_time_str = readings[0].get('time')
-                if not last_time_str:
-                    continue
-
-                last_time = datetime.fromisoformat(last_time_str)
-                if last_time.tzinfo is None:
-                    last_time = last_time.replace(tzinfo=timezone.utc)
-
-                silent_for = now - last_time
-
-                if silent_for < threshold:
-                    # Device is back — clear the Firestore flag so next outage alerts again
-                    database.clear_offline_alert_sent_at(house_id)
-                    continue
-
-                # Check Firestore: was an alert already sent for this outage?
-                alert_sent_at = database.get_offline_alert_sent_at(house_id)
-                if alert_sent_at is not None:
-                    continue
-
-                house = user_db.get_house(house_id)
-                resident_name = house.get('resident_name', 'your resident') if house else 'your resident'
-                minutes_silent = int(silent_for.total_seconds() // 60)
-                notifications.trigger_device_offline_alert(house_id, resident_name, minutes_silent)
-                database.log_device_offline_alert(house_id, minutes_silent)
-                database.set_offline_alert_sent_at(house_id, now)
-                print(f'[Scheduler] Offline alert sent for house {house_id} ({minutes_silent} min silent).')
-
-            except Exception as e:
-                print(f'[Scheduler] Error checking connectivity for house {house_id}: {e}')
-    except Exception as e:
-        print(f'[Scheduler] Fatal error in check_device_connectivity: {e}')
-
-
 scheduler = BackgroundScheduler()
 scheduler.add_job(
     func=scheduled_fine_tuning_job,
@@ -137,6 +80,12 @@ scheduler.add_job(
     trigger='interval',
     minutes=10,
     id='device_connectivity_checker',
+)
+scheduler.add_job(
+    func=check_sensor_health,
+    trigger='interval',
+    minutes=60,
+    id='sensor_health_checker',
 )
 
 if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':

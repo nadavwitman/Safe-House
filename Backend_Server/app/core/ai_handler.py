@@ -11,7 +11,12 @@ MODEL_PATH = os.path.join(BASE_DIR, "../../AI_Model/lstm_safe_house_model.pth")
 
 # Updated thresholds based on Colab test results (0.00004 normal vs 0.28 anomaly)
 EMERGENCY_THRESHOLD = 0.15
-WARNING_THRESHOLD = 0.05    
+WARNING_THRESHOLD = 0.05
+
+# Returned alongside a "Normal" verdict (or when inference can't run) so every caller
+# gets the same (sensor_id, decision, meta) shape. meta carries the structured context
+# the message composer needs: severity, activity type, and the most-anomalous room.
+_NORMAL_META = {'severity': 'Normal', 'activity_type': None, 'room_index': None}
 
 # ================================================================================================================
 # LSTM Autoencoder: the Encoder compresses the input sequence into a latent representation,
@@ -70,10 +75,17 @@ class LSTMAnomalyDetector(nn.Module):
 # Helper Logic for Activity Context (Context-Aware Anomaly Detection)
 # ===========================================================================
 
+# Heuristic thresholds for classifying the last-30-minute activity pattern.
+# Hand-tuned — revisit once real labelled data is available.
+HOSTING_MIN_MULTIPERSON_MINUTES = 3   # minutes with >1 room active → a guest is likely present
+AGITATION_MIN_EVENTS = 40             # very high movement count → restless / agitated
+STATIC_MAX_EVENTS = 5                 # almost no movement → possibly stuck / fallen
+
+
 def analyze_activity_context(buffer_data_list):
     """
     Analyzes the raw data pattern in the last 30 minutes to classify the anomaly.
-    This helps distinguish between 'Positive Over-activity' (Hosting) 
+    This helps distinguish between 'Positive Over-activity' (Hosting)
     and 'Negative Anomaly' (Being stuck/fall).
     """
     last_30 = buffer_data_list[-30:]
@@ -92,9 +104,9 @@ def analyze_activity_context(buffer_data_list):
             multi_person_points += 1
             
     # Classification logic
-    is_hosting = multi_person_points > 3  
-    is_high_agitation = total_movement_events > 40  
-    is_static = total_movement_events < 5  
+    is_hosting = multi_person_points > HOSTING_MIN_MULTIPERSON_MINUTES
+    is_high_agitation = total_movement_events > AGITATION_MIN_EVENTS
+    is_static = total_movement_events < STATIC_MAX_EVENTS
 
     if is_hosting:
         return "Social/Hosting"
@@ -108,8 +120,6 @@ def analyze_activity_context(buffer_data_list):
 # ===========================================================================
 # Receive the AI decision based on the .pth file from the google collab model
 # ===========================================================================
-import torch
-# Assuming LSTMAnomalyDetector, run_preprocessing_pipeline, and thresholds are imported here
 
 def evaluate_buffer_with_AI(
     buffer_data_list, 
@@ -136,7 +146,7 @@ def evaluate_buffer_with_AI(
 
     except Exception as e:
         print(f"Preprocessing failed: {e}")
-        return (latest_sensor_id, "Normal")
+        return (latest_sensor_id, "Normal", _NORMAL_META)
 
     # Check if a custom-trained baseline model object was passed from the RAM cache
     if model_instance is not None and isinstance(model_instance, LSTMAnomalyDetector):
@@ -153,7 +163,12 @@ def evaluate_buffer_with_AI(
             model.eval()
         except Exception as e:
             print(f"Error loading fallback PyTorch model from disk: {e}")
-            return (latest_sensor_id, "Normal")
+            return (latest_sensor_id, "Normal", _NORMAL_META)
+
+    # Force the decoder to reconstruct a sequence matching the current input length,
+    # regardless of the seq_len the model was originally built with. Defends against
+    # legacy personalized models that were saved with a different window length.
+    model.decoder.seq_len = seq_len
 
     with torch.no_grad():
         reconstructed = model(tensor_input)
@@ -164,8 +179,18 @@ def evaluate_buffer_with_AI(
         masked_loss = raw_loss * mask_tensor
 
         last_30_mins_loc_loss = masked_loss[0, -30:, 7:14]
-        active_loc_elements = torch.FloatTensor(house_sensor_mask).sum() * 30
+        # Divide by the ACTUAL number of minutes in the slice, not a hard-coded 30.
+        # On a partially-filled buffer the slice holds fewer than 30 rows; dividing by a
+        # fixed 30 would shrink the score ~proportionally and mask a real anomaly.
+        num_minutes = last_30_mins_loc_loss.shape[0]
+        active_loc_elements = torch.FloatTensor(house_sensor_mask).sum() * num_minutes
         loss_value = last_30_mins_loc_loss.sum().item() / (active_loc_elements + 1e-8)
+
+        # Which room did the model reconstruct worst? Summing the per-room location loss
+        # over the window and taking the argmax gives a SIGN (never a certainty) of where
+        # the anomaly is centred — inactive rooms are already zeroed by the mask above.
+        per_room_loss = last_30_mins_loc_loss.sum(dim=0)   # shape [7]
+        anomaly_room_index = int(torch.argmax(per_room_loss).item())
 
     print(f"[AI] Evaluated sequence. Smart Anomaly Score: {loss_value:.4f}")
 
@@ -182,95 +207,134 @@ def evaluate_buffer_with_AI(
     print(f"[AI] Threshold Multiplier applied: x{decay_multiplier:.2f}")
 
     # Context-Aware Decision Logic
-    if loss_value > current_emergency_threshold:   
+    meta = {'severity': None, 'activity_type': activity_type, 'room_index': anomaly_room_index}
+    if loss_value > current_emergency_threshold:
         if activity_type == "Social/Hosting":
-            return (latest_sensor_id, "Notice: Social Activity (High Loss)")
-        return (latest_sensor_id, f"Emergency: {activity_type}")
-        
-    elif loss_value > current_warning_threshold:   
-        if activity_type == "Social/Hosting":
-            return (latest_sensor_id, "Normal: Hosting")
-        return (latest_sensor_id, f"Warning: {activity_type}")
-        
-    else:
-        return (latest_sensor_id, "Normal")
-    
-import copy
-import os
-import torch
-import torch.nn as nn
-import torch.optim as optim
-# Assuming run_preprocessing_pipeline, LSTMAnomalyDetector, MODEL_PATH are imported
+            meta['severity'] = 'Normal'
+            return (latest_sensor_id, "Notice: Social Activity (High Loss)", meta)
+        meta['severity'] = 'Emergency'
+        return (latest_sensor_id, f"Emergency: {activity_type}", meta)
 
-def fine_tune_house_model(house_id: str, raw_training_data: list, house_sensor_mask: list, current_model=None, epochs=5, lr=0.001):
+    elif loss_value > current_warning_threshold:
+        if activity_type == "Social/Hosting":
+            meta['severity'] = 'Normal'
+            return (latest_sensor_id, "Normal: Hosting", meta)
+        meta['severity'] = 'Warning'
+        return (latest_sensor_id, f"Warning: {activity_type}", meta)
+
+    else:
+        meta['severity'] = 'Normal'
+        return (latest_sensor_id, "Normal", meta)
+    
+# 6-hour window (360 minutes) — MUST match the sequence length the base model was
+# trained on in the Colab notebook. Fine-tuning on this same window keeps train and
+# inference in the same distribution.
+WINDOW_SIZE = 360
+
+
+def _build_training_windows(scaled, window_size=WINDOW_SIZE, stride=30, max_windows=1000):
+    """Slices a scaled [N, 18] sequence into overlapping [W, window_size, 18] windows.
+
+    Replicates the sliding-window regime the base model was trained on. Feeding the whole
+    14-day period as one sequence instead would collapse it into a single latent vector and
+    train the autoencoder to output the mean — degrading the model. The window count is capped
+    to bound memory/compute on small instances (t3.micro).
     """
-    Fine tune the existing data with new data acquired in the last 14 days.
-    Modified to work with in-memory models for cloud storage integration.
+    n = scaled.shape[0]
+    starts = list(range(0, n - window_size + 1, stride))
+    if not starts:
+        return None
+    if len(starts) > max_windows:
+        step = len(starts) / max_windows
+        starts = [starts[int(i * step)] for i in range(max_windows)]
+    return torch.stack([scaled[s:s + window_size] for s in starts])
+
+
+def fine_tune_house_model(house_id: str, raw_training_data: list, house_sensor_mask: list,
+                          current_model=None, epochs=5, lr=0.001, batch_size=64):
     """
-    if not raw_training_data or len(raw_training_data) < 720:
-        print(f"[AI] Not enough recent data to fine-tune house {house_id}")
+    Continual-learning fine-tune on the resident's recent (last-14-day) routine.
+
+    The data is sliced into overlapping 6-hour windows — the exact regime the base model was
+    trained on — and the freshly trained weights are blended 70/30 with the previous weights
+    to avoid catastrophic forgetting. Works with in-memory models for cloud storage integration.
+    """
+    if not raw_training_data or len(raw_training_data) < 2 * WINDOW_SIZE:
+        have = len(raw_training_data) if raw_training_data else 0
+        print(f"[AI] Not enough recent data to fine-tune house {house_id} "
+              f"({have} rows, need >= {2 * WINDOW_SIZE}).")
         return None
 
     print(f"[AI] Starting Fine-Tuning for house {house_id} on {len(raw_training_data)} NEW records...")
     try:
-        tensor_data = run_preprocessing_pipeline(raw_training_data)
-        if not isinstance(tensor_data, torch.Tensor):
-            tensor_data = torch.FloatTensor(tensor_data)
-        if tensor_data.dim() == 2:
-            tensor_data = tensor_data.unsqueeze(0)
-        seq_len = tensor_data.shape[1]
+        tensor_data = run_preprocessing_pipeline(raw_training_data)  # [1, N, 18], scaled
+        scaled = tensor_data.squeeze(0)
+        windows = _build_training_windows(scaled)                    # [W, 360, 18]
+        if windows is None:
+            print(f"[AI] Could not build any {WINDOW_SIZE}-min window for {house_id}. Aborting.")
+            return None
     except Exception as e:
         print(f"Error preprocessing fine-tuning data: {e}")
         return None
 
     full_mask = house_sensor_mask + house_sensor_mask + [1, 1, 1, 1]
     mask_tensor = torch.FloatTensor(full_mask).view(1, 1, -1)
+    active_per_window = mask_tensor.sum() * WINDOW_SIZE  # active elements per window
 
-    # --- CLOUD INTEGRATION CHANGE ---
     # Use the RAM model if provided by the manager, otherwise load the generic baseline
     if current_model is not None:
         print(f"[AI] Using existing personalized model for {house_id} as base.")
         model = current_model
     else:
         print(f"[AI] No custom model provided. Loading default generic weights for {house_id}.")
-        model = LSTMAnomalyDetector(seq_len=seq_len, n_features=18, embedding_dim=64)
+        model = LSTMAnomalyDetector(seq_len=WINDOW_SIZE, n_features=18, embedding_dim=64)
         try:
             model.load_state_dict(torch.load(MODEL_PATH, map_location=torch.device('cpu')))
         except Exception as e:
             print(f"Error loading base model weights: {e}")
             return None
-    # --------------------------------
 
-    # A snapshot of the current pre-fine-tuning data
+    # Align the decoder's reconstruction length with our training window, so a legacy
+    # personalized model built with a different seq_len still trains correctly.
+    model.encoder.seq_len = WINDOW_SIZE
+    model.decoder.seq_len = WINDOW_SIZE
+
+    # Snapshot the pre-fine-tuning weights for the 70/30 blend below
     old_state_dict = copy.deepcopy(model.state_dict())
 
-    # Training the data based only on the last 14 days
     model.train()
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-5)
+    num_windows = windows.shape[0]
 
     for epoch in range(epochs):
-        optimizer.zero_grad()
-        reconstructed = model(tensor_data)
+        perm = torch.randperm(num_windows)
+        epoch_loss = 0.0
+        num_batches = 0
+        for i in range(0, num_windows, batch_size):
+            batch = windows[perm[i:i + batch_size]]
+            optimizer.zero_grad()
+            reconstructed = model(batch)
 
-        raw_loss = nn.functional.mse_loss(reconstructed, tensor_data, reduction='none')
-        masked_loss = raw_loss * mask_tensor
-        active_elements = mask_tensor.sum() * seq_len
-        loss = masked_loss.sum() / active_elements
+            raw_loss = nn.functional.mse_loss(reconstructed, batch, reduction='none')
+            masked_loss = raw_loss * mask_tensor
+            loss = masked_loss.sum() / (active_per_window * batch.shape[0] + 1e-8)
 
-        loss.backward()
-        optimizer.step()
+            loss.backward()
+            # Gradient clipping keeps LSTM training stable (prevents exploding gradients)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            optimizer.step()
+            epoch_loss += loss.item()
+            num_batches += 1
+        print(f"[AI] {house_id} epoch {epoch + 1}/{epochs} — "
+              f"loss {epoch_loss / max(num_batches, 1):.6f} over {num_windows} windows")
 
-    # Interpolate the old data based on 30 percent weight for the new data
+    # Blend 70% previous / 30% newly trained to avoid catastrophic forgetting
     new_trained_state_dict = model.state_dict()
-    blended_state_dict = {}
-
-    for key in old_state_dict:
-        blended_state_dict[key] = (0.7 * old_state_dict[key]) + (0.3 * new_trained_state_dict[key])
-
-    # Load the new weights from the interpolation back to the AI model
+    blended_state_dict = {
+        key: (0.7 * old_state_dict[key]) + (0.3 * new_trained_state_dict[key])
+        for key in old_state_dict
+    }
     model.load_state_dict(blended_state_dict)
 
     print(f"[AI] Weight Interpolation completed for {house_id} in RAM!")
-    
-    # Return the fully updated model object instead of saving to local disk
     return model

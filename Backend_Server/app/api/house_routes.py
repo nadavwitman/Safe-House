@@ -9,11 +9,17 @@ house_bp = Blueprint('house', __name__)
 @house_bp.route('/api/house/<house_id>/recent-events', methods=['GET'])
 @house_member_required
 def get_recent_events(house_id):
-    """Returns the most recent sensor readings for the dashboard activity feed."""
+    """Returns the most recent sensor readings for the dashboard activity feed,
+    plus a per-sensor last-activity map so each sensor's last-seen time is shown
+    even if it fired long before the recent window."""
     limit = min(int(request.args.get('limit', 50)), 100)
     readings = database.get_recent_sensor_events(house_id, limit=limit)
-    is_vacation = database.get_vacation_mode(house_id)
-    return jsonify({'readings': readings, 'is_vacation': is_vacation}), 200
+    meta = database.get_house_activity_meta(house_id)
+    return jsonify({
+        'readings': readings,
+        'is_vacation': meta['is_vacation'],
+        'last_activity': meta['last_activity'],
+    }), 200
 
 
 @house_bp.route('/api/house/sensor-mask', methods=['POST'])

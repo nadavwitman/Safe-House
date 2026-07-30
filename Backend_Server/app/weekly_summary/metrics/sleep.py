@@ -1,4 +1,5 @@
-MAX_GAP_MINUTES = 60
+from app.weekly_summary.constants import MAX_ATTRIBUTABLE_GAP_MINUTES as MAX_GAP_MINUTES
+
 INTERRUPTION_THRESHOLD_MINUTES = 10
 
 
@@ -26,7 +27,7 @@ def _compute_sleep_metrics(window_df, house_mask):
     bedroom_minutes = float(df.loc[df['current_location'] == 5, 'gap_min'].sum())
     sleep_hours = round(min(max(bedroom_minutes / 60, 0.0), 16.0), 2)
 
-    # Interruptions: contiguous out-of-bedroom gaps > 5 minutes within the window
+    # Interruptions: contiguous out-of-bedroom stretches > 10 minutes within the window
     interruptions = 0
     in_bedroom = df['current_location'] == 5
 

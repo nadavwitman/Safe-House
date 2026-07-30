@@ -5,6 +5,8 @@ import database.database as database
 import database.user_db as user_db
 from app.core import notifications
 from app.core.ai_handler import evaluate_buffer_with_AI
+import app.core.device_health as device_health
+from app.core import alert_messages
 
 # Import the global cache dictionary and download helper from your manager
 from app.weekly_summary.model_manager import HOUSES_MODELS_CACHE, download_model_from_firebase
@@ -34,6 +36,46 @@ def _validate_device_token(house_id, token):
     return False
 
 
+# Tracks houses whose in-memory buffer was already reconstructed from Firestore after a
+# cold start, so we only pay the historical read once per house per process.
+_warmed_houses: set = set()
+
+
+def _ensure_buffer_warm(house_id):
+    """Replays recent Firestore history into the in-memory buffer on cold start.
+
+    The buffer lives in process memory and is wiped on every restart/deploy. Without
+    this, an established house would take a full 6 hours to refill before the model
+    could run again. We replay at most one full window (360 readings) in chronological
+    order, once per house per process.
+    """
+    if house_id in _warmed_houses:
+        return
+    _warmed_houses.add(house_id)
+
+    # Nothing to warm if this process already accumulated readings for the house.
+    if sensor_buffer.get_all_readings(house_id):
+        return
+
+    try:
+        recent = database.get_recent_sensor_events(house_id, limit=sensor_buffer.threshold)
+    except Exception as e:
+        print(f"[Buffer] Warm-start read failed for {house_id}: {e}")
+        return
+
+    # get_recent_sensor_events returns newest-first; replay oldest-first so the deque
+    # preserves chronological order for the LSTM.
+    for r in reversed(recent):
+        sensor_buffer.add_reading({
+            'house_id': house_id,
+            'sensor_vector': r.get('sensor_vector'),
+            'current_location': r.get('current_location'),
+            'time': r.get('time'),
+        })
+    if recent:
+        print(f"[Buffer] Warm-started {house_id} with {len(recent)} readings from Firestore.")
+
+
 @analyze_bp.route('/api/analyze', methods=['POST'])
 def analyze_data():
     try:
@@ -59,6 +101,10 @@ def analyze_data():
             # Extract the fine-tune count for dynamic threshold decay in the AI handler
             fine_tune_count = house.get('model_metadata', {}).get('fine_tune_count', 0)
 
+        # Reconstruct the buffer from Firestore on cold start so a restart doesn't blind
+        # the model for a full 6-hour window (must run before the buffer is read below).
+        _ensure_buffer_warm(house_id)
+
         # Resolve current_location: payload → last buffer reading → last DB value → default
         current_location = data.get('current_location')
         if not (isinstance(current_location, list) and len(current_location) == 7 and all(b in (0, 1) for b in current_location)):
@@ -73,6 +119,7 @@ def analyze_data():
         data['current_location'] = current_location if current_location is not None else DEFAULT_LOCATION
         ai_sensor = "System_Vector"
         ai_decision = "Normal"
+        ai_meta = {'severity': 'Normal', 'activity_type': None, 'room_index': None}
 
         # Add to buffer and persist (now with resolved current_location)
         sensor_buffer.add_reading(data)
@@ -81,8 +128,12 @@ def analyze_data():
         # Aquire all current buffer data for processing
         buffer_data = sensor_buffer.get_all_readings(house_id)
 
-        # Making sure we have at least 1 minute to send to the model
-        if len(buffer_data) > 0:
+        # Only run the model once we hold a full 6-hour window (360 minutes). The model was
+        # trained on fixed 360-length sequences and the anomaly score is calibrated on that
+        # window — a partial buffer yields an out-of-distribution, unreliable score. Warm-start
+        # above ensures an established house reaches this threshold right after a restart; only a
+        # genuinely new install (<6h of history) waits for the window to fill.
+        if sensor_buffer.has_enough_data(house_id):
             house_mask = house_mask_store.get_mask(house_id)
 
             # --- ARTIFACT INTEGRATION: IN-MEMORY RAM CACHE LIFECYCLE ---
@@ -104,13 +155,16 @@ def analyze_data():
             # -----------------------------------------------------------
 
             # Get the AI model decision utilizing the custom model and threshold decay count
-            ai_sensor, ai_decision = evaluate_buffer_with_AI(
-                buffer_data_list=buffer_data, 
-                latest_sensor_id=ai_sensor, 
+            ai_sensor, ai_decision, ai_meta = evaluate_buffer_with_AI(
+                buffer_data_list=buffer_data,
+                latest_sensor_id=ai_sensor,
                 house_sensor_mask=house_mask,
                 model_instance=current_model_instance,
                 fine_tune_count=fine_tune_count
             )
+        else:
+            print(f"[AI] Buffer for {house_id} holds {len(buffer_data)}/{sensor_buffer.threshold} "
+                  f"readings — skipping inference until the 6-hour window fills.")
 
         # Act accordingly to the model's decision
         if "Hosting" in ai_decision or "Social" in ai_decision:
@@ -131,8 +185,33 @@ def analyze_data():
             if last and (now - last) < _ALERT_COOLDOWN:
                 return jsonify({"status": "success", "decision": final_decision, "fcm_status": "Cooldown"}), 200
             _last_alert_time[house_id] = now
-            database.log_ai_decision(house_id, ai_sensor, final_decision)
-            notifications.trigger_fcm_alert(ai_sensor, final_decision, house_id)
+            # Enrich (never suppress) the alert with any sensors the health checker
+            # currently suspects are faulty, so a device fault isn't mistaken for — nor
+            # hides — a real emergency. Read from the shared in-process cache (no extra
+            # Firestore reads; safe under gunicorn's single worker).
+            faulty_idx = device_health.FAULTY_SENSORS_CACHE.get(house_id) or set()
+            faulty_names = [device_health.SENSOR_NAMES.get(i, f'Sensor {i}')
+                            for i in sorted(faulty_idx)]
+            resident_name = house.get('resident_name') if house else None
+            # The real "last seen" time = the most recent moment any sensor fired, so the
+            # Stuck/Fall message reports actual last activity (possibly days ago) instead of
+            # the alert time. It's already on the house doc fetched above — no extra read.
+            last_activity_map = (house or {}).get('last_sensor_activity') or {}
+            last_seen_dt = max(last_activity_map.values(), default=None)
+            # Compose a focused, situation-specific message from the AI's structured
+            # verdict (severity + activity type + worst-reconstructed room + last location).
+            title, body = alert_messages.compose_alert_message(
+                severity=final_decision,
+                activity_type=ai_meta.get('activity_type'),
+                room_index=ai_meta.get('room_index'),
+                resident_name=resident_name,
+                last_seen_dt=last_seen_dt,
+                last_location=data.get('current_location'),
+                faulty_sensor_names=faulty_names,
+            )
+            database.log_ai_decision(house_id, ai_sensor, final_decision,
+                                     note=body, title=title)
+            notifications.send_alert_push(house_id, title, body)
             return jsonify({
                 "status": "success", 
                 "decision": final_decision, 

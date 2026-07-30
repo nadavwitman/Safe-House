@@ -17,15 +17,13 @@ from apscheduler.triggers.cron import CronTrigger
 
 
 def _fine_tuning_job():
+    # Delegate to the MLOps pipeline, which fine-tunes AND persists each updated model to
+    # Firebase Storage (bumping the fine-tune counter and invalidating the RAM cache). The
+    # previous inline loop trained models and discarded the return value, so personalization
+    # never actually took effect.
     try:
-        import database.user_db as user_db
-        from app.core.ai_handler import fine_tune_house_model
-
-        house_ids = user_db.get_all_active_house_ids()
-        for house_id in house_ids:
-            mask = database.get_sensor_mask(house_id)
-            data = database.fetch_finetuning_data(house_id)
-            fine_tune_house_model(house_id, data, mask)
+        from app.weekly_summary.model_manager import run_weekly_mlops_pipeline_scalable
+        run_weekly_mlops_pipeline_scalable()
         print("[Scheduler] Fine-tuning completed for all houses.")
     except Exception as e:
         print(f"[Scheduler] Fine-tuning error: {e}")

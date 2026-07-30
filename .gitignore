@@ -29,7 +29,12 @@ Thumbs.db
 .idea/
 
 # --- Firebase ---
+# The service-account key actually lives under database/. Ignore every location it
+# could appear so the private key is never committed. (The previous pattern only
+# matched app/, leaving the real database/ key exposed.)
 Backend_Server/app/firebase-credentials.json
+Backend_Server/database/firebase-credentials.json
+**/firebase-credentials.json
 
 # --- AI Model ---
 *.csv

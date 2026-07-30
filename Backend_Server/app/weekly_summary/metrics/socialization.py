@@ -1,4 +1,4 @@
-MAX_GAP_MINUTES = 60
+from app.weekly_summary.constants import MAX_ATTRIBUTABLE_GAP_MINUTES as MAX_GAP_MINUTES
 
 
 def _compute_outside_duration(day_df, house_mask):
