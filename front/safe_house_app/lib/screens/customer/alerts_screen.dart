@@ -141,7 +141,14 @@ class _AlertsScreenState extends State<AlertsScreen> {
                 icon: Icons.wifi_off_rounded,
                 tone: 'warn',
                 label: 'Device offline',
-                description: 'Sent when the Safe House sensor stops reporting for 30+ minutes.',
+                description: 'Sent when the Safe House device stops reporting for 30+ minutes.',
+              ),
+              const SizedBox(height: 10),
+              _AlertTypeCard(
+                icon: Icons.sensors_off_rounded,
+                tone: 'warn',
+                label: 'Possible sensor fault',
+                description: 'Sent when a specific sensor goes quiet for an unusually long time — it may be faulty or out of battery.',
               ),
               const SizedBox(height: 20),
 
@@ -316,26 +323,47 @@ class _AlertRow extends StatelessWidget {
     final type = alert['type'] as String? ?? 'ai';
     final decision = alert['decision'] as String? ?? '';
     final sensorId = alert['sensor_id'] as String? ?? '';
-    final minutesSilent = alert['minutes_silent'] as int?;
+    final minutesSilent = (alert['minutes_silent'] as num?)?.toInt();
+    final hoursSilent = (alert['hours_silent'] as num?)?.toInt();
+    // Server-composed, situation-specific message (present on AI anomaly alerts).
+    final serverTitle = alert['title'] as String?;
+    final serverNote = alert['note'] as String?;
 
     final isOffline = type == 'device_offline';
+    final isFault = type == 'sensor_fault';
     final isEmergency = decision == 'Emergency';
     final friendlyName = _AlertsScreenState._friendlySensor(sensorId);
 
-    final IconData icon = isOffline
-        ? Icons.wifi_off_rounded
-        : (isEmergency ? Icons.emergency_outlined : Icons.warning_amber_rounded);
-    final String tone = isEmergency ? 'alert' : 'warn';
+    final IconData icon;
+    final String tone;
+    final String title;
+    final String body;
 
-    final String title = isOffline
-        ? 'Device not responding'
-        : (isEmergency ? 'Emergency — $friendlyName' : 'Warning — $friendlyName');
-
-    final String body = isOffline
-        ? 'No signal for ${minutesSilent ?? '?'} minutes. Please check the device.'
-        : (isEmergency
-            ? 'Extended lack of motion detected near $friendlyName.'
-            : 'Unusual pattern detected near $friendlyName.');
+    if (isOffline) {
+      icon = Icons.wifi_off_rounded;
+      tone = 'warn';
+      title = 'Device not responding';
+      body = 'No signal for ${minutesSilent ?? '?'} minutes. Please check the device.';
+    } else if (isFault) {
+      icon = Icons.sensors_off_rounded;
+      tone = 'warn';
+      title = 'Possible sensor fault';
+      final dur = hoursSilent != null ? 'over $hoursSilent hours' : 'a long time';
+      body = "The $friendlyName sensor hasn't reported in $dur. "
+          'It may be faulty, disconnected, or out of battery.';
+    } else {
+      // AI anomaly — prefer the server's focused message; fall back to a generic line.
+      icon = isEmergency ? Icons.emergency_outlined : Icons.warning_amber_rounded;
+      tone = isEmergency ? 'alert' : 'warn';
+      title = (serverTitle != null && serverTitle.isNotEmpty)
+          ? serverTitle
+          : (isEmergency ? 'Emergency — $friendlyName' : 'Warning — $friendlyName');
+      body = (serverNote != null && serverNote.isNotEmpty)
+          ? serverNote
+          : (isEmergency
+              ? 'Extended lack of motion detected near $friendlyName.'
+              : 'Unusual pattern detected near $friendlyName.');
+    }
 
     return AppCard(
       padding: const EdgeInsets.all(16),

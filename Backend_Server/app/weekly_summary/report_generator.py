@@ -47,7 +47,9 @@ Respond ONLY with valid JSON matching this exact structure:
 
 Tone: warm, accessible, non-alarming. \
 If baseline deltas are provided, compare to the individual's personal norm. \
-If no baseline exists, provide a neutral summary of observed activity without judgement."""
+If no baseline exists, provide a neutral summary of observed activity without judgement. \
+Any day marked "insufficient sensor data" had a device outage — ignore it and never treat \
+missing data as inactivity, poor sleep, or a skipped meal. A "?" means not measured, not zero."""
 
 
 # ---------------------------------------------------------------------------
@@ -71,6 +73,11 @@ def format_compact_prompt(weekly_metrics, house_id):
 
     for d in days:
         weekday = _date.fromisoformat(d['date']).strftime('%a')
+        if d.get('low_data'):
+            # Device outage that day — metrics are excluded, not zero. Flag it explicitly
+            # so the model doesn't read the missing values as a lack of activity.
+            lines.append(f"{weekday} {d['date']}: (insufficient sensor data — device outage, excluded from analysis)")
+            continue
         meds_str = f"Meds:{d['meds_count']}x@{d['meds_hours']}" if d['meds_count'] else "Meds:0"
         lines.append(
             f"{weekday} {d['date']}: "

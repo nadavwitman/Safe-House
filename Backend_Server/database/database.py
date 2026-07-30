@@ -65,9 +65,27 @@ def log_vector_reading(data, house_id='default_house'):
         'current_location': data.get('current_location'),
         'is_vacation': get_vacation_mode(house_id),
     })
-    db.collection('houses').document(house_id).set(
-        {'last_current_location': data.get('current_location')}, merge=True
-    )
+    # Maintain a denormalized "last time each sensor fired (==1)" map on the house
+    # document. Updated incrementally on every write, so the dashboard can show a
+    # sensor's last activity in O(1) — even if it last fired weeks ago — without
+    # scanning the per-minute history. merge=True merges nested map keys, so only
+    # the sensors active *this* minute get a fresh timestamp; the rest are kept.
+    # last_reading_at is refreshed on EVERY post (even an all-zeros vector), so the
+    # health checks can tell "master online but sensors silent" (per-sensor fault)
+    # apart from "master gone dark entirely" (device offline).
+    house_update = {
+        'last_current_location': data.get('current_location'),
+        'last_reading_at': parsed_time,
+    }
+    sensor_vector = data.get('sensor_vector') or []
+    active_now = {
+        str(i): parsed_time
+        for i, v in enumerate(sensor_vector)
+        if v == 1 or v is True
+    }
+    if active_now:
+        house_update['last_sensor_activity'] = active_now
+    db.collection('houses').document(house_id).set(house_update, merge=True)
 
 
 def get_last_current_location(house_id='default_house'):
@@ -108,6 +126,103 @@ def get_recent_sensor_events(house_id, limit=50):
             'time': time_str,
         })
     return results
+
+
+def get_house_activity_meta(house_id):
+    """Single house-doc read for the dashboard: vacation flag + per-sensor last-activity.
+
+    Returns {'is_vacation': bool, 'last_activity': {sensor_index(int): iso_time_str}}.
+    The last-activity map is maintained by log_vector_reading, so it reflects the
+    last time each sensor fired regardless of how far back that was.
+    """
+    doc = db.collection('houses').document(house_id).get()
+    if not doc.exists:
+        return {'is_vacation': False, 'last_activity': {}}
+    data = doc.to_dict() or {}
+    raw = data.get('last_sensor_activity', {}) or {}
+    last_activity = {}
+    for key, t in raw.items():
+        try:
+            idx = int(key)
+        except (TypeError, ValueError):
+            continue
+        if hasattr(t, 'isoformat'):
+            last_activity[idx] = t.isoformat()
+        elif isinstance(t, str):
+            last_activity[idx] = t
+    return {'is_vacation': data.get('is_vacation', False), 'last_activity': last_activity}
+
+
+# ===========================================================================
+# Device & sensor health state (single-read helpers for the scheduler)
+# ===========================================================================
+
+def get_house_health_doc(house_id):
+    """One house-doc read returning everything the sensor-health check needs.
+
+    Returns None if the house doc doesn't exist. Firestore timestamps come back as
+    tz-aware datetimes; the sensor-index keys of the activity/alert maps are
+    normalized to ints so the caller can index them directly.
+    """
+    doc = db.collection('houses').document(house_id).get()
+    if not doc.exists:
+        return None
+    data = doc.to_dict() or {}
+
+    def _int_key_map(raw):
+        out = {}
+        for k, v in (raw or {}).items():
+            try:
+                out[int(k)] = v
+            except (TypeError, ValueError):
+                continue
+        return out
+
+    return {
+        'sensor_mask': data.get('sensor_mask'),
+        'last_sensor_activity': _int_key_map(data.get('last_sensor_activity')),
+        'faulty_sensor_alert_sent': _int_key_map(data.get('faulty_sensor_alert_sent')),
+        'activated_at': data.get('activated_at'),
+        'last_reading_at': data.get('last_reading_at'),
+        'is_vacation': data.get('is_vacation', False),
+    }
+
+
+def set_activated_at(house_id, ts):
+    """Records when the house first came online — the reference point from which a
+    never-fired sensor's silence is measured, so a fresh install gets a grace window."""
+    db.collection('houses').document(house_id).set({'activated_at': ts}, merge=True)
+
+
+def update_faulty_sensor_flags(house_id, set_indices, clear_indices):
+    """Marks/clears the per-sensor 'fault alert already sent' flags in a single write.
+
+    Uses dotted field paths so only the changed sensor keys are touched — a set marks
+    the flag True (so we alert once per outage), a clear removes it (so the sensor can
+    alert again if it fails a second time after recovering).
+    """
+    updates = {}
+    for i in set_indices:
+        updates[f'faulty_sensor_alert_sent.{i}'] = True
+    for i in clear_indices:
+        updates[f'faulty_sensor_alert_sent.{i}'] = firestore.DELETE_FIELD
+    if not updates:
+        return
+    db.collection('houses').document(house_id).update(updates)
+
+
+def log_sensor_fault_alert(house_id, sensor_index, sensor_name, hours_silent):
+    """Logs a suspected-sensor-fault alert into ai_decisions so it appears in the
+    in-app alert history alongside AI anomalies and device-offline events."""
+    doc_ref = db.collection('houses').document(house_id).collection('ai_decisions').document()
+    doc_ref.set({
+        'sensor_id': sensor_name,
+        'decision': 'Sensor Fault',
+        'type': 'sensor_fault',
+        'sensor_index': sensor_index,
+        'hours_silent': hours_silent,
+        'time': datetime.now(timezone.utc),
+    })
 
 
 def get_vacation_mode(house_id) -> bool:
@@ -169,18 +284,26 @@ def clear_vacation_schedule(house_id):
     )
 
 
-def log_ai_decision(house_id, sensor_id, decision):
+def log_ai_decision(house_id, sensor_id, decision, note=None, title=None):
     """
     Logs the finalized, normalized AI decision into a dedicated subcollection.
     Essential for historical parsing and the weekly summary generation pipeline.
+    `decision` stays the clean severity ('Emergency'/'Warning') so consumers that key
+    off it are unaffected; `title` and `note` carry the focused, human-readable message
+    the app displays.
     """
     doc_ref = db.collection('houses').document(house_id).collection('ai_decisions').document()
-    doc_ref.set({
+    payload = {
         'sensor_id': sensor_id,
         'decision': decision,
         'type': 'ai',
         'time': datetime.now(timezone.utc)
-    })
+    }
+    if title:
+        payload['title'] = title
+    if note:
+        payload['note'] = note
+    doc_ref.set(payload)
 
 
 def log_device_offline_alert(house_id, minutes_silent):
@@ -215,6 +338,9 @@ def get_alert_history(house_id, limit=50):
             'decision': d.get('decision'),
             'type': d.get('type', 'ai'),
             'minutes_silent': d.get('minutes_silent'),
+            'hours_silent': d.get('hours_silent'),
+            'title': d.get('title'),
+            'note': d.get('note'),
             'time': t.isoformat() if hasattr(t, 'isoformat') else str(t),
         })
     return results

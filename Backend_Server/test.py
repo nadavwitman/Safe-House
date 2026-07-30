@@ -70,7 +70,7 @@ print("="*60 + "\n")
 
 for sc, s_id in zip(scenarios, sensor_ids):
     log = generate_mock_buffer(sc)
-    _, res = evaluate_buffer_with_AI(log, s_id, house_mask)
+    _, res, _ = evaluate_buffer_with_AI(log, s_id, house_mask)
     print(f"Scenario: {sc.upper()} | Result: {res}\n" + "-"*30)
 
 print("="*60)

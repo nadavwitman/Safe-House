@@ -6,9 +6,10 @@ import '../../theme/colors.dart';
 import '../../widgets/shared_widgets.dart';
 import '../../services/auth_state.dart';
 import '../../services/house_service.dart';
+import '../../services/insights_service.dart';
 
 // ── Data ───────────────────────────────────────────────────────
-enum HouseStatus { clear, vacation }
+enum HouseStatus { clear, warning, emergency, vacation }
 
 class SensorDef {
   final String id, name, tone;
@@ -49,6 +50,9 @@ class _DashboardScreenState extends State<DashboardScreen>
   final Map<int, DateTime> _lastActivity = {};
   Timer? _timer;
   bool _refreshing = false;
+  // Home-screen status derived from the latest AI decision (see _deriveStatus).
+  HouseStatus _alertStatus = HouseStatus.clear;
+  DateTime? _lastStatusFetch;
 
   // How often to poll the backend for new sensor activity. The screen lives
   // inside an IndexedStack, so this keeps ticking across tab switches but is
@@ -96,35 +100,46 @@ class _DashboardScreenState extends State<DashboardScreen>
     _refreshing = true;
     try {
       final data = await HouseService.getRecentEvents(houseId);
-      final readings = data['readings'] as List<dynamic>? ?? [];
       final serverVacation = data['is_vacation'] as bool? ?? false;
       if (serverVacation != AuthState.instance.vacationMode) {
         await AuthState.instance.setVacationMode(serverVacation);
       }
+      // last_activity is a server-maintained map {sensorIndex: isoTime} of the
+      // last time each sensor fired — so a sensor's last-seen time is shown even
+      // if it fired weeks ago, without scanning the full per-minute history.
+      final rawActivity =
+          (data['last_activity'] as Map<String, dynamic>?) ?? const {};
       final Map<int, DateTime> found = {};
-      for (final reading in readings) {
-        final vector = (reading['sensor_vector'] as List<dynamic>?) ?? [];
-        final timeStr = reading['time'] as String?;
-        if (timeStr == null) continue;
-        DateTime time;
-        try {
-          time = DateTime.parse(timeStr).toLocal();
-        } catch (_) {
-          continue;
-        }
-        for (int i = 0; i < vector.length && i < 7; i++) {
-          if (!found.containsKey(i) && (vector[i] == 1 || vector[i] == true)) {
-            found[i] = time;
-          }
-        }
-        if (found.length == 7) break;
-      }
+      rawActivity.forEach((key, value) {
+        final idx = int.tryParse(key);
+        final timeStr = value as String?;
+        if (idx == null || idx < 0 || idx > 6 || timeStr == null) return;
+        final parsed = DateTime.tryParse(timeStr);
+        if (parsed != null) found[idx] = parsed.toLocal();
+      });
       if (!mounted) return;
-      if (_hasChanged(found)) {
-        setState(() => _lastActivity..clear()..addAll(found));
-      } else {
-        // Same data, but relative-time labels ("2m ago") still need to age.
-        setState(() {});
+      // Merge, never wipe: the server's last-activity map only ever grows, so a poll that
+      // returns it empty or partial (a slow/incomplete response) must NOT clear a sensor's
+      // last-seen time — that was causing the card to flicker to "No data yet". We only
+      // add/update entries; the display stays stable and labels still age each tick.
+      final changed = found.entries.any((e) => _lastActivity[e.key] != e.value);
+      setState(() {
+        if (changed) _lastActivity.addAll(found);
+      });
+
+      // Home status reflects the latest AI decision. It only changes ~every 30 min
+      // (alert cooldown), so refresh it at most every ~25s rather than on every poll.
+      final now = DateTime.now();
+      if (_lastStatusFetch == null ||
+          now.difference(_lastStatusFetch!) > const Duration(seconds: 25)) {
+        _lastStatusFetch = now;
+        try {
+          final alerts = await InsightsService.getAlerts(houseId);
+          final s = _deriveStatus(alerts);
+          if (mounted && s != _alertStatus) setState(() => _alertStatus = s);
+        } catch (_) {
+          // keep last-known status on a failed status poll
+        }
       }
     } catch (_) {
       // silently ignore — stale data stays on screen
@@ -133,13 +148,24 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 
-  bool _hasChanged(Map<int, DateTime> next) {
-    if (_lastActivity.length != next.length) return true;
-    for (final entry in next.entries) {
-      if (_lastActivity[entry.key] != entry.value) return true;
+  /// Maps the most recent AI decision into a home-screen status. A warning re-fires
+  /// at most every 30 min while the anomaly persists, so anything older than ~40 min
+  /// is treated as resolved (back to All Clear).
+  HouseStatus _deriveStatus(List<Map<String, dynamic>> alerts) {
+    if (alerts.isEmpty) return HouseStatus.clear;
+    final latest = alerts.first; // endpoint returns newest first
+    final timeStr = latest['time'] as String?;
+    final t = timeStr != null ? DateTime.tryParse(timeStr) : null;
+    if (t == null) return HouseStatus.clear;
+    if (DateTime.now().difference(t.toLocal()) > const Duration(minutes: 40)) {
+      return HouseStatus.clear;
     }
-    return false;
+    final decision = (latest['decision'] as String? ?? '').toLowerCase();
+    if (decision.contains('emergency')) return HouseStatus.emergency;
+    if (decision.contains('warning')) return HouseStatus.warning;
+    return HouseStatus.clear;
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -155,7 +181,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     final residentName =
         activeHouse?['resident_name'] as String? ?? 'your house';
     final isVacation = auth.vacationMode;
-    final status = isVacation ? HouseStatus.vacation : HouseStatus.clear;
+    final status = isVacation ? HouseStatus.vacation : _alertStatus;
     final rawMask = activeHouse?['sensor_mask'] as List<dynamic>?;
     final mask = (rawMask != null && rawMask.length == 7)
         ? rawMask.map((v) => v == 1 || v == true).toList()
@@ -305,21 +331,44 @@ class _StatusHeroState extends State<_StatusHero>
   @override
   Widget build(BuildContext context) {
     final isVacation = widget.status == HouseStatus.vacation;
-    final (label, accentColor, accentSoft, body, icon) = isVacation
-        ? (
-            'Vacation Mode',
-            const Color(0xFF3F6868),
-            const Color(0xFFE1ECEC),
-            'Sensors are still recording, but alerts are off while ${widget.residentName} is away.',
-            Icons.luggage_outlined,
-          )
-        : (
-            'All Clear',
-            AppColors.sage600,
-            AppColors.sage100,
-            'Monitoring is active. Alerts will be sent if anything unusual is detected.',
-            Icons.home_outlined,
-          );
+    final isAlerting = widget.status == HouseStatus.warning ||
+        widget.status == HouseStatus.emergency;
+    final (
+      String label,
+      Color accentColor,
+      Color accentSoft,
+      String body,
+      IconData icon
+    ) = switch (widget.status) {
+      HouseStatus.emergency => (
+          'Emergency',
+          AppColors.alert,
+          AppColors.alertSoft,
+          'Unusual activity that may need immediate attention. Please check in now.',
+          Icons.warning_amber_rounded,
+        ),
+      HouseStatus.warning => (
+          'Heads Up',
+          AppColors.warn,
+          AppColors.warnSoft,
+          'A small anomaly was detected. Nothing urgent — check the alert below.',
+          Icons.notifications_active_outlined,
+        ),
+      HouseStatus.vacation => (
+          'Vacation Mode',
+          const Color(0xFF3F6868),
+          const Color(0xFFE1ECEC),
+          'Sensors are still recording, but alerts are off while ${widget.residentName} is away.',
+          Icons.luggage_outlined,
+        ),
+      HouseStatus.clear => (
+          'All Clear',
+          AppColors.sage600,
+          AppColors.sage100,
+          'Monitoring is active. Alerts will be sent if anything unusual is detected.',
+          Icons.home_outlined,
+        ),
+    };
 
     return AppCard(
       padding: const EdgeInsets.all(18),
@@ -337,8 +386,21 @@ class _StatusHeroState extends State<_StatusHero>
               const Spacer(),
               AppTag(
                 label: isVacation ? 'Live · alerts off' : 'Live',
-                tone: isVacation ? 'neutral' : 'sage',
-                icon: StatusDot(tone: 'ok'),
+                tone: isVacation
+                    ? 'neutral'
+                    : widget.status == HouseStatus.emergency
+                        ? 'alert'
+                        : widget.status == HouseStatus.warning
+                            ? 'warn'
+                            : 'sage',
+                icon: StatusDot(
+                  tone: widget.status == HouseStatus.emergency
+                      ? 'alert'
+                      : widget.status == HouseStatus.warning
+                          ? 'warn'
+                          : 'ok',
+                  pulse: isAlerting,
+                ),
               ),
             ],
           ),

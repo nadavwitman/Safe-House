@@ -1,16 +1,10 @@
-import os
 import io
 import pickle
-from datetime import datetime
+from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
-import numpy as np
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import TensorDataset, DataLoader
+import torch  # kept so unpickling serialized torch models resolves cleanly
 from firebase_admin import storage
 from database.database import db, fetch_finetuning_data
-from datetime import datetime, timezone
 from app.core.house_mask_store import house_mask_store
 from app.core.ai_handler import fine_tune_house_model
 
@@ -44,114 +38,6 @@ def download_model_from_firebase(house_id):
         print(f"[MLOps] Exception raised during model retrieval for house {house_id}: {str(e)}")
         return None
 
-
-def prepare_colab_dataloaders(readings, seq_len=30, batch_size=32):
-    """
-    Converts raw Firestore sequence logs into sliding-window sequences 
-    and wraps them into PyTorch DataLoaders exactly like the Colab notebook implementation.
-    """
-    # 1. Vectorize and transform document dicts into a structured numeric NumPy array
-    # This matches your 18-feature layout (or whatever feature size your system expects)
-    data_matrix = []
-    for doc in readings:
-        data = doc.to_dict()
-        # Extract features in the correct sequential column order
-        # features = [data.get(f'f_{i}', 0.0) for i in range(18)]
-        # data_matrix.append(features)
-        
-        # Temporary fallback placeholder ensuring array structure matches your feature shape
-        if 'features' in data:
-            data_matrix.append(data['features'])
-        else:
-            # Generate a consistent baseline shape array if structured fields differ
-            data_matrix.append(np.zeros(18))
-            
-    data_array = np.array(data_matrix, dtype=np.float32)
-    
-    if len(data_array) <= seq_len:
-        return None, None
-
-    # 2. Extract sequences using a Sliding Window approach
-    sequences = []
-    for i in range(len(data_array) - seq_len + 1):
-        sequences.append(data_array[i : i + seq_len])
-    
-    sequences = np.array(sequences, dtype=np.float32)
-    
-    # 3. Split into Train / Validation sets (80% / 20%)
-    split_idx = int(len(sequences) * 0.8)
-    train_seqs = sequences[:split_idx]
-    val_seqs = sequences[split_idx:]
-    
-    if len(train_seqs) == 0 or len(val_seqs) == 0:
-        return None, None
-
-    # 4. Wrap with TensorDataset and DataLoader
-    train_dataset = TensorDataset(torch.from_numpy(train_seqs), torch.from_numpy(train_seqs))
-    val_dataset = TensorDataset(torch.from_numpy(val_seqs), torch.from_numpy(val_seqs))
-    
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-    
-    return train_loader, val_loader
-
-
-def train_model_engine(model, train_loader, val_loader, n_epochs=50):
-    """
-    The core PyTorch execution loop from Colab, implementing Early Stopping,
-    L2 regularization (weight decay), and Gradient Clipping for LSTM stability.
-    """
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = model.to(device)
-
-    optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
-    criterion = nn.MSELoss()
-
-    best_loss = float('inf')
-    patience = 10
-    counter = 0
-
-    for epoch in range(n_epochs):
-        # Training Phase
-        model.train()
-        train_losses = []
-        for x_batch, _ in train_loader:
-            x_batch = x_batch.to(device)
-            optimizer.zero_grad()
-
-            output = model(x_batch)
-            loss = criterion(output, x_batch)
-            loss.backward()
-
-            # Gradient Clipping to prevent exploding gradients in LSTMs
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.step()
-            train_losses.append(loss.item())
-
-        # Validation Phase
-        model.eval()
-        val_losses = []
-        with torch.no_grad():
-            for x_val, _ in val_loader:
-                x_val = x_val.to(device)
-                output = model(x_val)
-                loss = criterion(output, x_val)
-                val_losses.append(loss.item())
-
-        train_loss = np.mean(train_losses)
-        val_loss = np.mean(val_losses)
-
-        # Early Stopping check
-        if val_loss < best_loss:
-            best_loss = val_loss
-            counter = 0
-        else:
-            counter += 1
-            if counter >= patience:
-                print(f"[MLOps Engine] Early Stopping triggered at epoch {epoch+1}")
-                break
-
-    return model
 
 def auto_train_house_model(house_id):
     """

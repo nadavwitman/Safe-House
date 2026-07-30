@@ -134,6 +134,8 @@ def _setup_scheduler():
         except Exception as e:
             print(f"[Scheduler] Fatal error in check_vacation_schedules: {e}")
 
+    from app.core.device_health import check_device_connectivity, check_sensor_health
+
     scheduler = BackgroundScheduler(daemon=True)
     scheduler.add_job(
         func=scheduled_weekly_insights,
@@ -149,8 +151,26 @@ def _setup_scheduler():
         id='vacation_schedule_checker',
         replace_existing=True,
     )
+    # Device offline (master gateway silent 30+ min) — every 10 minutes.
+    scheduler.add_job(
+        func=check_device_connectivity,
+        trigger='interval',
+        minutes=10,
+        id='device_connectivity_checker',
+        replace_existing=True,
+    )
+    # Per-sensor "suspected faulty sensor" (a servant silent 24h / door 72h) — hourly.
+    scheduler.add_job(
+        func=check_sensor_health,
+        trigger='interval',
+        minutes=60,
+        id='sensor_health_checker',
+        replace_existing=True,
+    )
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown(wait=False))
 
     print("[Scheduler] Weekly insights scheduler started — runs every Sunday at 06:00.")
     print("[Scheduler] Vacation schedule checker started — runs every 5 minutes.")
+    print("[Scheduler] Device connectivity checker started — runs every 10 minutes.")
+    print("[Scheduler] Sensor health checker started — runs every 60 minutes.")

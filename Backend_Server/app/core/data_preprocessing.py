@@ -10,6 +10,17 @@ import torch
 # This path goes up from 'core', up from 'app', into 'AI_Model'
 SCALER_PATH = os.path.join(os.path.dirname(__file__), "../../AI_Model/scaler.pkl")
 
+# Module-level cache — the scaler is immutable, so load it from disk once instead of on
+# every inference call (which happens once a minute per house).
+_scaler = None
+
+
+def _get_scaler():
+    global _scaler
+    if _scaler is None:
+        _scaler = joblib.load(SCALER_PATH)
+    return _scaler
+
 # This function will receive the sensors vector from the ESP32 and will transform it into a panda's data frame
 def format_sensor_data(raw_data):
     """
@@ -101,9 +112,9 @@ def run_preprocessing_pipeline(raw_data):
     
     data_raw = df[cols_for_ai]
 
-    # 2. Load the MinMaxScaler saved during Colab training
+    # 2. Load the MinMaxScaler saved during Colab training (cached after first load)
     # Ensure scaler.pkl is present at SCALER_PATH
-    scaler = joblib.load(SCALER_PATH)
+    scaler = _get_scaler()
 
     # 3. Normalize all features to [0, 1]
     data_scaled = scaler.transform(data_raw)
