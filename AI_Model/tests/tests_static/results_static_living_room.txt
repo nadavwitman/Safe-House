@@ -1,0 +1,71 @@
+STATIC LOCATION -- stuck-in-Living Room scenario
+Anomaly: continuous Living Room stay 06:00-15:30 (570min, vs a minimum_expected_run of 170min). Rest of the day is a normal generated routine.
+Rolling 360-minute window, 1-minute step: 1h of normal routine before the anomaly, the anomaly itself, and 1h after (to see recovery).
+
+  now  win_start  severity    type              zone           score  focus_score
+06:00          0  Normal      -                 -             0.0000  0.0000
+06:10         10  Normal      -                 -             0.0000  0.0556
+06:20         20  Normal      -                 -             0.0000  0.1053
+06:30         30  Normal      -                 -             0.0000  0.1500
+06:40         40  Normal      -                 -             0.0000  0.1905
+06:50         50  Normal      -                 -             0.0000  0.2273
+07:00         60  Normal      -                 -             0.0000  0.2609
+07:10         70  Normal      -                 -             0.0000  0.2917
+07:20         80  Normal      -                 -             0.0000  0.3200
+07:30         90  Normal      -                 -             0.0000  0.3462
+07:40        100  Normal      -                 -             0.0000  0.3704
+07:50        110  Normal      -                 -             0.0000  0.3929
+08:00        120  Normal      -                 -             0.0000  0.4138
+08:10        130  Normal      -                 -             0.0000  0.4333
+08:20        140  Normal      -                 -             0.0000  0.4516
+08:30        150  Normal      -                 -             0.0000  0.4688
+08:40        160  Normal      -                 -             0.0000  0.4848
+08:50        170  Normal      -                 -             0.0000  0.5000
+09:00        180  Normal      -                 -             0.0000  0.5143
+09:10        190  Normal      -                 -             0.0000  0.5278
+09:20        200  Normal      -                 -             0.0000  0.5405
+09:30        210  Normal      -                 -             0.0000  0.5526
+09:40        220  Normal      -                 -             0.0000  0.5641
+09:50        230  Normal      -                 -             0.0000  0.5750
+10:00        240  Normal      -                 -             0.0000  0.5854
+10:10        250  Normal      -                 -             0.0000  0.5952
+10:20        260  Normal      -                 -             0.0000  0.6047
+10:30        270  Normal      -                 -             0.0000  0.6136
+10:40        280  Normal      -                 -             0.0000  0.6222
+10:50        290  Normal      -                 -             0.0000  0.6304
+11:00        300  Normal      -                 -             0.0000  0.6383
+11:10        310  Normal      -                 -             0.0000  0.6445
+11:20        320  Normal      -                 -             0.0000  0.6478
+11:30        330  Normal      -                 -             0.0000  0.6458
+11:40        340  Normal      -                 -             0.0000  0.6391
+11:50        350  Normal      -                 -             0.0000  0.6341
+12:00        360  Normal      -                 -             0.0000  0.6283
+12:10        370  Normal      -                 -             0.0000  0.6175
+12:20        380  Normal      -                 -             0.0000  0.6071
+12:30        390  Normal      -                 -             0.0000  0.5980
+12:40        400  Normal      -                 -             0.0000  0.5882
+12:50        410  Normal      -                 -             0.0000  0.5788
+13:00        420  Normal      -                 -             0.0000  0.5705
+13:10        430  Normal      -                 -             0.0000  0.5625
+13:20        440  Normal      -                 -             0.0000  0.5538
+13:30        450  Normal      -                 -             0.0000  0.5463
+13:40        460  Normal      -                 -             0.0000  0.5381
+13:50        470  Normal      -                 -             0.0000  0.5788
+14:00        480  Normal      -                 -             0.0000  0.5844
+14:10        490  Normal      -                 -             0.0000  0.5873
+14:20        500  Normal      -                 -             0.0000  0.5769
+14:30        510  Normal      -                 -             0.0000  0.5892
+14:40        520  Normal      -                 -             0.0000  0.6010
+14:50        530  Normal      -                 -             0.0000  0.6143
+15:00        540  Normal      -                 -             0.0000  0.6283
+15:10        550  Normal      -                 -             0.0000  0.6417
+15:17        557  Warning     Static Location   Living Room   0.6510  0.6510
+15:20        560  Warning     Static Location   Living Room   0.6545  0.6545
+15:30        570  Warning     Static Location   Living Room   0.6679  0.6679
+15:31        571  Normal      -                 -             0.0000  0.0000
+15:40        580  Normal      -                 -             0.0000  0.0000
+15:50        590  Normal      -                 -             0.0000  0.0000
+16:00        600  Normal      -                 -             0.0000  0.0000
+16:10        610  Normal      -                 -             0.0000  0.0000
+16:20        620  Normal      -                 -             0.0000  0.0000
+16:30        630  Normal      -                 -             0.0000  0.0000

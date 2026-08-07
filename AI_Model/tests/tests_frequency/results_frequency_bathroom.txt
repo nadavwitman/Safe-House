@@ -1,0 +1,91 @@
+HIGH FREQUENCY -- repeated Bathroom visits scenario
+Anomaly: a Bathroom sensor pulse every 5min from 10:00-15:00 (far more distinct visit-starts than baseline). Rest of the day is a normal generated routine.
+Rolling 360-minute window, 1-minute step: 1h of normal routine before the anomaly, the anomaly itself, and 1h after (to see recovery).
+
+  now  win_start  severity    type              zone           score  focus_score
+09:00        180  Normal      -                 -             0.0000  0.0089
+09:05        185  Normal      -                 -             0.0000  0.0084
+09:10        190  Normal      -                 -             0.0000  0.0081
+09:15        195  Normal      -                 -             0.0000  0.0079
+09:20        200  Normal      -                 -             0.0000  0.0079
+09:25        205  Normal      -                 -             0.0000  0.0080
+09:30        210  Normal      -                 -             0.0000  0.0082
+09:35        215  Normal      -                 -             0.0000  0.0086
+09:40        220  Normal      -                 -             0.0000  0.0090
+09:45        225  Normal      -                 -             0.0000  0.0095
+09:50        230  Normal      -                 -             0.0000  0.0101
+09:55        235  Normal      -                 -             0.0000  0.0108
+10:00        240  Normal      -                 -             0.0000  0.0116
+10:05        245  Normal      -                 -             0.0000  0.2080
+10:10        250  Normal      -                 -             0.0000  0.3393
+10:15        255  Normal      -                 -             0.0000  0.4333
+10:20        260  Normal      -                 -             0.0000  0.5037
+10:25        265  Normal      -                 -             0.0000  0.5587
+10:30        270  Normal      -                 -             0.0000  0.6028
+10:35        275  Normal      -                 -             0.0000  0.6389
+10:36        276  Warning     High Frequency    Bathroom      0.6689  0.6689
+10:40        280  Warning     High Frequency    Bathroom      0.6692  0.6692
+10:45        285  Warning     High Frequency    Bathroom      0.6947  0.6947
+10:50        290  Warning     High Frequency    Bathroom      0.7166  0.7166
+10:55        295  Warning     High Frequency    Bathroom      0.7355  0.7355
+11:00        300  Warning     High Frequency    Bathroom      0.7520  0.7520
+11:05        305  Warning     High Frequency    Bathroom      0.7666  0.7666
+11:10        310  Warning     High Frequency    Bathroom      0.7795  0.7795
+11:15        315  Warning     High Frequency    Bathroom      0.7796  0.7796
+11:20        320  Warning     High Frequency    Bathroom      0.7911  0.7911
+11:25        325  Warning     High Frequency    Bathroom      0.8015  0.8015
+11:30        330  Warning     High Frequency    Bathroom      0.8110  0.8110
+11:35        335  Warning     High Frequency    Bathroom      0.8195  0.8195
+11:40        340  Warning     High Frequency    Bathroom      0.8273  0.8273
+11:45        345  Warning     High Frequency    Bathroom      0.8345  0.8345
+11:50        350  Warning     High Frequency    Bathroom      0.8411  0.8411
+11:55        355  Warning     High Frequency    Bathroom      0.8472  0.8472
+12:00        360  Warning     High Frequency    Bathroom      0.8528  0.8528
+12:05        365  Warning     High Frequency    Bathroom      0.8580  0.8580
+12:10        370  Warning     High Frequency    Bathroom      0.8629  0.8629
+12:15        375  Warning     High Frequency    Bathroom      0.8675  0.8675
+12:20        380  Warning     High Frequency    Bathroom      0.8718  0.8718
+12:25        385  Warning     High Frequency    Bathroom      0.8758  0.8758
+12:30        390  Warning     High Frequency    Bathroom      0.8795  0.8795
+12:35        395  Warning     High Frequency    Bathroom      0.8831  0.8831
+12:40        400  Warning     High Frequency    Bathroom      0.8864  0.8864
+12:45        405  Warning     High Frequency    Bathroom      0.8896  0.8896
+12:50        410  Warning     High Frequency    Bathroom      0.8926  0.8926
+12:55        415  Warning     High Frequency    Bathroom      0.8954  0.8954
+13:00        420  Warning     High Frequency    Bathroom      0.8981  0.8981
+13:05        425  Warning     High Frequency    Bathroom      0.9006  0.9006
+13:10        430  Warning     High Frequency    Bathroom      0.9030  0.9030
+13:15        435  Warning     High Frequency    Bathroom      0.9053  0.9053
+13:20        440  Warning     High Frequency    Bathroom      0.9075  0.9075
+13:25        445  Warning     High Frequency    Bathroom      0.9096  0.9096
+13:30        450  Warning     High Frequency    Bathroom      0.9116  0.9116
+13:35        455  Warning     High Frequency    Bathroom      0.9135  0.9135
+13:40        460  Warning     High Frequency    Bathroom      0.9153  0.9153
+13:45        465  Warning     High Frequency    Bathroom      0.9170  0.9170
+13:50        470  Warning     High Frequency    Bathroom      0.9187  0.9187
+13:55        475  Warning     High Frequency    Bathroom      0.9203  0.9203
+14:00        480  Warning     High Frequency    Bathroom      0.9218  0.9218
+14:05        485  Warning     High Frequency    Bathroom      0.9218  0.9218
+14:10        490  Warning     High Frequency    Bathroom      0.9218  0.9218
+14:15        495  Warning     High Frequency    Bathroom      0.9218  0.9218
+14:20        500  Warning     High Frequency    Bathroom      0.9218  0.9218
+14:25        505  Warning     High Frequency    Bathroom      0.9218  0.9218
+14:30        510  Warning     High Frequency    Bathroom      0.9218  0.9218
+14:35        515  Warning     High Frequency    Bathroom      0.9218  0.9218
+14:40        520  Warning     High Frequency    Bathroom      0.9218  0.9218
+14:45        525  Warning     High Frequency    Bathroom      0.9218  0.9218
+14:50        530  Warning     High Frequency    Bathroom      0.9218  0.9218
+14:55        535  Warning     High Frequency    Bathroom      0.9218  0.9218
+15:00        540  Warning     High Frequency    Bathroom      0.9218  0.9218
+15:05        545  Warning     High Frequency    Bathroom      0.9202  0.9202
+15:10        550  Warning     High Frequency    Bathroom      0.9186  0.9186
+15:15        555  Warning     High Frequency    Bathroom      0.9169  0.9169
+15:20        560  Warning     High Frequency    Bathroom      0.9151  0.9151
+15:25        565  Warning     High Frequency    Bathroom      0.9133  0.9133
+15:30        570  Warning     High Frequency    Bathroom      0.9114  0.9114
+15:35        575  Warning     High Frequency    Bathroom      0.9094  0.9094
+15:40        580  Warning     High Frequency    Bathroom      0.9073  0.9073
+15:45        585  Warning     High Frequency    Bathroom      0.9051  0.9051
+15:50        590  Warning     High Frequency    Bathroom      0.9027  0.9027
+15:55        595  Warning     High Frequency    Bathroom      0.9003  0.9003
+16:00        600  Warning     High Frequency    Bathroom      0.8978  0.8978

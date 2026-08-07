@@ -1,0 +1,46 @@
+Rows: 525600  (365 days x 1440 minutes)
+
+SLEEP
+  Average duration: 8.38h  (std 1.21h)
+  Bedtime:  mean 22:26  std 50min  range [21:00, 23:59]
+  Wake-up:  mean 06:48  std 49min  range [05:00, 07:59]
+
+MEALS
+  Breakfast: mean 08:02  std 18min  range [07:09, 08:59]
+  Lunch:     mean 12:37  std 51min  range [11:00, 13:59]  (52/365 days skipped/away)
+  Dinner:    mean 18:14  std 49min  range [17:00, 19:59]
+
+TOILET / NIGHT BATHROOM
+  Daytime toilet visits/day: mean 6.0  (std 1.3, expect 4-8)
+  Night visits/day (toilet+bathroom): mean 0.92  (std 0.75, expect 0-2; of which bathroom: 0.32)
+
+SHOWER
+  Frequency: 292/365 days (80%)
+  Time:      mean 07:19  std 39min  range [05:14, 09:21]
+  Duration:  mean 12.0min  (std 5.2min, range [5, 25]min)
+
+MEDICATION TIMING CONSISTENCY
+  Morning : 08:17 +/- 19min (range [07:24, 09:21])
+  Evening : 22:00 +/- 52min (range [19:59, 23:59])
+
+OUTINGS
+  Outings/day: mean 1.02  (std 0.67)
+  Days with >=1 outing: 286/365
+
+PER-ZONE SENSOR ACTIVATION RATE (events/day)
+  Door        :   2.0/day  (721 total over 365 days)
+  Kitchen     :   5.1/day  (1874 total over 365 days)
+  Bathroom    :   2.5/day  (910 total over 365 days)
+  Toilet      :   5.4/day  (1972 total over 365 days)
+  Medications :   2.0/day  (730 total over 365 days)
+  Bedroom     :   6.1/day  (2219 total over 365 days)
+  Living Room :  15.4/day  (5614 total over 365 days)
+
+LOCATION OCCUPANCY (% of minutes, sticky one-hot over all 7 zones)
+  Door        :  12.5%
+  Kitchen     :   5.2%
+  Bathroom    :   1.1%
+  Toilet      :   1.0%
+  Medications :   0.1%
+  Bedroom     :  34.6%
+  Living Room :  45.6%

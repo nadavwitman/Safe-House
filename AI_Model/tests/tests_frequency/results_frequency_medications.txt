@@ -1,0 +1,91 @@
+HIGH FREQUENCY -- repeated Medications visits scenario
+Anomaly: a Medications sensor pulse every 5min from 10:00-15:00 (far more distinct visit-starts than baseline). Rest of the day is a normal generated routine.
+Rolling 360-minute window, 1-minute step: 1h of normal routine before the anomaly, the anomaly itself, and 1h after (to see recovery).
+
+  now  win_start  severity    type              zone           score  focus_score
+09:00        180  Normal      -                 -             0.0000  0.0000
+09:05        185  Normal      -                 -             0.0000  0.0000
+09:10        190  Normal      -                 -             0.0000  0.0000
+09:15        195  Normal      -                 -             0.0000  0.0000
+09:20        200  Normal      -                 -             0.0000  0.0000
+09:25        205  Normal      -                 -             0.0000  0.0000
+09:30        210  Normal      -                 -             0.0000  0.0000
+09:35        215  Normal      -                 -             0.0000  0.0000
+09:40        220  Normal      -                 -             0.0000  0.0000
+09:45        225  Normal      -                 -             0.0000  0.0000
+09:50        230  Normal      -                 -             0.0000  0.0000
+09:55        235  Normal      -                 -             0.0000  0.0000
+10:00        240  Normal      -                 -             0.0000  0.0000
+10:05        245  Normal      -                 -             0.0000  0.2513
+10:10        250  Normal      -                 -             0.0000  0.4550
+10:15        255  Normal      -                 -             0.0000  0.5715
+10:20        260  Normal      -                 -             0.0000  0.6470
+10:21        261  Warning     High Frequency    Medications   0.6999  0.6999
+10:25        265  Warning     High Frequency    Medications   0.6999  0.6999
+10:30        270  Warning     High Frequency    Medications   0.7388  0.7388
+10:35        275  Warning     High Frequency    Medications   0.7690  0.7690
+10:40        280  Warning     High Frequency    Medications   0.7929  0.7929
+10:45        285  Warning     High Frequency    Medications   0.8122  0.8122
+10:50        290  Warning     High Frequency    Medications   0.8283  0.8283
+10:55        295  Warning     High Frequency    Medications   0.8418  0.8418
+11:00        300  Warning     High Frequency    Medications   0.8533  0.8533
+11:05        305  Warning     High Frequency    Medications   0.8633  0.8633
+11:10        310  Warning     High Frequency    Medications   0.8720  0.8720
+11:15        315  Warning     High Frequency    Medications   0.8797  0.8797
+11:20        320  Warning     High Frequency    Medications   0.8865  0.8865
+11:25        325  Warning     High Frequency    Medications   0.8926  0.8926
+11:30        330  Warning     High Frequency    Medications   0.8981  0.8981
+11:35        335  Warning     High Frequency    Medications   0.9030  0.9030
+11:40        340  Warning     High Frequency    Medications   0.9075  0.9075
+11:45        345  Warning     High Frequency    Medications   0.9116  0.9116
+11:50        350  Warning     High Frequency    Medications   0.9154  0.9154
+11:55        355  Warning     High Frequency    Medications   0.9188  0.9188
+12:00        360  Warning     High Frequency    Medications   0.9220  0.9220
+12:05        365  Warning     High Frequency    Medications   0.9249  0.9249
+12:10        370  Warning     High Frequency    Medications   0.9276  0.9276
+12:15        375  Warning     High Frequency    Medications   0.9302  0.9302
+12:20        380  Warning     High Frequency    Medications   0.9325  0.9325
+12:25        385  Warning     High Frequency    Medications   0.9347  0.9347
+12:30        390  Warning     High Frequency    Medications   0.9368  0.9368
+12:35        395  Warning     High Frequency    Medications   0.9387  0.9387
+12:40        400  Warning     High Frequency    Medications   0.9406  0.9406
+12:45        405  Warning     High Frequency    Medications   0.9423  0.9423
+12:50        410  Warning     High Frequency    Medications   0.9440  0.9440
+12:55        415  Warning     High Frequency    Medications   0.9456  0.9456
+13:00        420  Warning     High Frequency    Medications   0.9471  0.9471
+13:05        425  Warning     High Frequency    Medications   0.9484  0.9484
+13:10        430  Warning     High Frequency    Medications   0.9497  0.9497
+13:15        435  Warning     High Frequency    Medications   0.9509  0.9509
+13:20        440  Warning     High Frequency    Medications   0.9521  0.9521
+13:25        445  Warning     High Frequency    Medications   0.9532  0.9532
+13:30        450  Warning     High Frequency    Medications   0.9543  0.9543
+13:35        455  Warning     High Frequency    Medications   0.9553  0.9553
+13:40        460  Warning     High Frequency    Medications   0.9563  0.9563
+13:45        465  Warning     High Frequency    Medications   0.9572  0.9572
+13:50        470  Warning     High Frequency    Medications   0.9581  0.9581
+13:55        475  Warning     High Frequency    Medications   0.9590  0.9590
+14:00        480  Warning     High Frequency    Medications   0.9598  0.9598
+14:05        485  Warning     High Frequency    Medications   0.9606  0.9606
+14:10        490  Warning     High Frequency    Medications   0.9613  0.9613
+14:15        495  Warning     High Frequency    Medications   0.9621  0.9621
+14:20        500  Warning     High Frequency    Medications   0.9628  0.9628
+14:25        505  Warning     High Frequency    Medications   0.9635  0.9635
+14:30        510  Warning     High Frequency    Medications   0.9635  0.9635
+14:35        515  Warning     High Frequency    Medications   0.9641  0.9641
+14:40        520  Warning     High Frequency    Medications   0.9648  0.9648
+14:45        525  Warning     High Frequency    Medications   0.9654  0.9654
+14:50        530  Warning     High Frequency    Medications   0.9660  0.9660
+14:55        535  Warning     High Frequency    Medications   0.9665  0.9665
+15:00        540  Warning     High Frequency    Medications   0.9671  0.9671
+15:05        545  Warning     High Frequency    Medications   0.9671  0.9671
+15:10        550  Warning     High Frequency    Medications   0.9671  0.9671
+15:15        555  Warning     High Frequency    Medications   0.9671  0.9671
+15:20        560  Warning     High Frequency    Medications   0.9671  0.9671
+15:25        565  Warning     High Frequency    Medications   0.9671  0.9671
+15:30        570  Warning     High Frequency    Medications   0.9671  0.9671
+15:35        575  Warning     High Frequency    Medications   0.9671  0.9671
+15:40        580  Warning     High Frequency    Medications   0.9671  0.9671
+15:45        585  Warning     High Frequency    Medications   0.9671  0.9671
+15:50        590  Warning     High Frequency    Medications   0.9671  0.9671
+15:55        595  Warning     High Frequency    Medications   0.9671  0.9671
+16:00        600  Warning     High Frequency    Medications   0.9670  0.9670

@@ -1,0 +1,59 @@
+STATIC LOCATION -- stuck-in-Kitchen scenario
+Anomaly: continuous Kitchen stay 06:00-13:20 (440min, vs a minimum_expected_run of 40min). Rest of the day is a normal generated routine.
+Rolling 360-minute window, 1-minute step: 1h of normal routine before the anomaly, the anomaly itself, and 1h after (to see recovery).
+
+  now  win_start  severity    type              zone           score  focus_score
+06:00          0  Normal      -                 -             0.0000  0.0000
+06:10         10  Normal      -                 -             0.0000  0.2000
+06:20         20  Normal      -                 -             0.0000  0.3333
+06:30         30  Normal      -                 -             0.0000  0.4286
+06:40         40  Normal      -                 -             0.0000  0.5000
+06:50         50  Normal      -                 -             0.0000  0.5556
+07:00         60  Normal      -                 -             0.0000  0.6000
+07:10         70  Normal      -                 -             0.0000  0.6364
+07:15         75  Warning     Static Location   Kitchen       0.6522  0.6522
+07:20         80  Warning     Static Location   Kitchen       0.6667  0.6667
+07:30         90  Warning     Static Location   Kitchen       0.6923  0.6923
+07:40        100  Warning     Static Location   Kitchen       0.7143  0.7143
+07:50        110  Warning     Static Location   Kitchen       0.7333  0.7333
+08:00        120  Warning     Static Location   Kitchen       0.7500  0.7500
+08:10        130  Warning     Static Location   Kitchen       0.7647  0.7647
+08:20        140  Warning     Static Location   Kitchen       0.7778  0.7778
+08:30        150  Warning     Static Location   Kitchen       0.7895  0.7895
+08:40        160  Warning     Static Location   Kitchen       0.8000  0.8000
+08:50        170  Warning     Static Location   Kitchen       0.8095  0.8095
+09:00        180  Warning     Static Location   Kitchen       0.8182  0.8182
+09:10        190  Warning     Static Location   Kitchen       0.8261  0.8261
+09:20        200  Warning     Static Location   Kitchen       0.8333  0.8333
+09:30        210  Warning     Static Location   Kitchen       0.8400  0.8400
+09:40        220  Warning     Static Location   Kitchen       0.8462  0.8462
+09:47        227  Emergency   Static Location   Kitchen       0.8502  0.8502
+09:50        230  Emergency   Static Location   Kitchen       0.8519  0.8519
+10:00        240  Emergency   Static Location   Kitchen       0.8571  0.8571
+10:10        250  Emergency   Static Location   Kitchen       0.8621  0.8621
+10:20        260  Emergency   Static Location   Kitchen       0.8667  0.8667
+10:30        270  Emergency   Static Location   Kitchen       0.8710  0.8710
+10:40        280  Emergency   Static Location   Kitchen       0.8750  0.8750
+10:50        290  Emergency   Static Location   Kitchen       0.8788  0.8788
+11:00        300  Emergency   Static Location   Kitchen       0.8824  0.8824
+11:10        310  Emergency   Static Location   Kitchen       0.8857  0.8857
+11:20        320  Emergency   Static Location   Kitchen       0.8889  0.8889
+11:30        330  Emergency   Static Location   Kitchen       0.8919  0.8919
+11:40        340  Emergency   Static Location   Kitchen       0.8947  0.8947
+11:50        350  Emergency   Static Location   Kitchen       0.8974  0.8974
+12:00        360  Emergency   Static Location   Kitchen       0.9000  0.9000
+12:10        370  Emergency   Static Location   Kitchen       0.9000  0.9000
+12:20        380  Emergency   Static Location   Kitchen       0.9000  0.9000
+12:30        390  Emergency   Static Location   Kitchen       0.9000  0.9000
+12:40        400  Emergency   Static Location   Kitchen       0.9000  0.9000
+12:50        410  Emergency   Static Location   Kitchen       0.9000  0.9000
+13:00        420  Emergency   Static Location   Kitchen       0.8955  0.8955
+13:10        430  Emergency   Static Location   Kitchen       0.8738  0.8738
+13:20        440  Emergency   Static Location   Kitchen       0.8675  0.8675
+13:21        441  Normal      -                 -             0.0000  0.0000
+13:30        450  Normal      -                 -             0.0000  0.0000
+13:40        460  Normal      -                 -             0.0000  0.0000
+13:50        470  Normal      -                 -             0.0000  0.0000
+14:00        480  Normal      -                 -             0.0000  0.0000
+14:10        490  Normal      -                 -             0.0000  0.0000
+14:20        500  Normal      -                 -             0.0000  0.0000

@@ -1,0 +1,91 @@
+HIGH FREQUENCY -- repeated Kitchen visits scenario
+Anomaly: a Kitchen sensor pulse every 5min from 10:00-15:00 (far more distinct visit-starts than baseline). Rest of the day is a normal generated routine.
+Rolling 360-minute window, 1-minute step: 1h of normal routine before the anomaly, the anomaly itself, and 1h after (to see recovery).
+
+  now  win_start  severity    type              zone           score  focus_score
+09:00        180  Normal      -                 -             0.0000  0.1076
+09:05        185  Normal      -                 -             0.0000  0.1044
+09:10        190  Normal      -                 -             0.0000  0.1016
+09:15        195  Normal      -                 -             0.0000  0.0991
+09:20        200  Normal      -                 -             0.0000  0.0968
+09:25        205  Normal      -                 -             0.0000  0.0948
+09:30        210  Normal      -                 -             0.0000  0.2323
+09:35        215  Normal      -                 -             0.0000  0.2313
+09:40        220  Normal      -                 -             0.0000  0.2300
+09:45        225  Normal      -                 -             0.0000  0.2293
+09:50        230  Normal      -                 -             0.0000  0.2289
+09:55        235  Normal      -                 -             0.0000  0.3313
+10:00        240  Normal      -                 -             0.0000  0.3314
+10:05        245  Normal      -                 -             0.0000  0.4106
+10:10        250  Normal      -                 -             0.0000  0.4733
+10:15        255  Normal      -                 -             0.0000  0.5241
+10:20        260  Normal      -                 -             0.0000  0.5661
+10:25        265  Normal      -                 -             0.0000  0.6014
+10:30        270  Normal      -                 -             0.0000  0.6314
+10:31        271  Warning     High Frequency    Kitchen       0.6568  0.6568
+10:35        275  Warning     High Frequency    Kitchen       0.6572  0.6572
+10:40        280  Warning     High Frequency    Kitchen       0.6797  0.6797
+10:45        285  Warning     High Frequency    Kitchen       0.6994  0.6994
+10:50        290  Warning     High Frequency    Kitchen       0.7171  0.7171
+10:55        295  Warning     High Frequency    Kitchen       0.7330  0.7330
+11:00        300  Warning     High Frequency    Kitchen       0.7470  0.7470
+11:05        305  Warning     High Frequency    Kitchen       0.7475  0.7475
+11:10        310  Warning     High Frequency    Kitchen       0.7600  0.7600
+11:15        315  Warning     High Frequency    Kitchen       0.7713  0.7713
+11:20        320  Warning     High Frequency    Kitchen       0.7716  0.7716
+11:25        325  Warning     High Frequency    Kitchen       0.7818  0.7818
+11:30        330  Warning     High Frequency    Kitchen       0.7910  0.7910
+11:35        335  Warning     High Frequency    Kitchen       0.7995  0.7995
+11:40        340  Warning     High Frequency    Kitchen       0.8073  0.8073
+11:45        345  Warning     High Frequency    Kitchen       0.8145  0.8145
+11:50        350  Warning     High Frequency    Kitchen       0.8212  0.8212
+11:55        355  Warning     High Frequency    Kitchen       0.8274  0.8274
+12:00        360  Warning     High Frequency    Kitchen       0.8331  0.8331
+12:05        365  Warning     High Frequency    Kitchen       0.8385  0.8385
+12:10        370  Warning     High Frequency    Kitchen       0.8436  0.8436
+12:15        375  Warning     High Frequency    Kitchen       0.8484  0.8484
+12:20        380  Warning     High Frequency    Kitchen       0.8528  0.8528
+12:25        385  Warning     High Frequency    Kitchen       0.8610  0.8610
+12:30        390  Warning     High Frequency    Kitchen       0.8610  0.8610
+12:35        395  Warning     High Frequency    Kitchen       0.8647  0.8647
+12:40        400  Warning     High Frequency    Kitchen       0.8683  0.8683
+12:45        405  Warning     High Frequency    Kitchen       0.8716  0.8716
+12:50        410  Warning     High Frequency    Kitchen       0.8748  0.8748
+12:55        415  Warning     High Frequency    Kitchen       0.8748  0.8748
+13:00        420  Warning     High Frequency    Kitchen       0.8778  0.8778
+13:05        425  Warning     High Frequency    Kitchen       0.8777  0.8777
+13:10        430  Warning     High Frequency    Kitchen       0.8777  0.8777
+13:15        435  Warning     High Frequency    Kitchen       0.8776  0.8776
+13:20        440  Warning     High Frequency    Kitchen       0.8775  0.8775
+13:25        445  Warning     High Frequency    Kitchen       0.8775  0.8775
+13:30        450  Warning     High Frequency    Kitchen       0.8773  0.8773
+13:35        455  Warning     High Frequency    Kitchen       0.8772  0.8772
+13:40        460  Warning     High Frequency    Kitchen       0.8771  0.8771
+13:45        465  Warning     High Frequency    Kitchen       0.8769  0.8769
+13:50        470  Warning     High Frequency    Kitchen       0.8768  0.8768
+13:55        475  Warning     High Frequency    Kitchen       0.8765  0.8765
+14:00        480  Warning     High Frequency    Kitchen       0.8765  0.8765
+14:05        485  Warning     High Frequency    Kitchen       0.8765  0.8765
+14:10        490  Warning     High Frequency    Kitchen       0.8764  0.8764
+14:15        495  Warning     High Frequency    Kitchen       0.8764  0.8764
+14:20        500  Warning     High Frequency    Kitchen       0.8764  0.8764
+14:25        505  Warning     High Frequency    Kitchen       0.8764  0.8764
+14:30        510  Warning     High Frequency    Kitchen       0.8764  0.8764
+14:35        515  Warning     High Frequency    Kitchen       0.8764  0.8764
+14:40        520  Warning     High Frequency    Kitchen       0.8764  0.8764
+14:45        525  Warning     High Frequency    Kitchen       0.8764  0.8764
+14:50        530  Warning     High Frequency    Kitchen       0.8764  0.8764
+14:55        535  Warning     High Frequency    Kitchen       0.8765  0.8765
+15:00        540  Warning     High Frequency    Kitchen       0.8765  0.8765
+15:05        545  Warning     High Frequency    Kitchen       0.8734  0.8734
+15:10        550  Warning     High Frequency    Kitchen       0.8701  0.8701
+15:15        555  Warning     High Frequency    Kitchen       0.8667  0.8667
+15:20        560  Warning     High Frequency    Kitchen       0.8631  0.8631
+15:25        565  Warning     High Frequency    Kitchen       0.8552  0.8552
+15:30        570  Warning     High Frequency    Kitchen       0.8509  0.8509
+15:35        575  Warning     High Frequency    Kitchen       0.8465  0.8465
+15:40        580  Warning     High Frequency    Kitchen       0.8417  0.8417
+15:45        585  Warning     High Frequency    Kitchen       0.8368  0.8368
+15:50        590  Warning     High Frequency    Kitchen       0.8316  0.8316
+15:55        595  Warning     High Frequency    Kitchen       0.8261  0.8261
+16:00        600  Warning     High Frequency    Kitchen       0.8201  0.8201

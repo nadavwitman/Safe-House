@@ -1,0 +1,55 @@
+STATIC LOCATION -- stuck-in-Toilet scenario
+Anomaly: continuous Toilet stay 06:00-12:48 (408min, vs a minimum_expected_run of 8min). Rest of the day is a normal generated routine.
+Rolling 360-minute window, 1-minute step: 1h of normal routine before the anomaly, the anomaly itself, and 1h after (to see recovery).
+
+  now  win_start  severity    type              zone           score  focus_score
+06:00          0  Normal      -                 -             0.0000  0.0000
+06:10         10  Normal      -                 -             0.0000  0.5556
+06:15         15  Warning     Static Location   Toilet        0.6522  0.6522
+06:20         20  Warning     Static Location   Toilet        0.7143  0.7143
+06:30         30  Warning     Static Location   Toilet        0.7895  0.7895
+06:40         40  Warning     Static Location   Toilet        0.8333  0.8333
+06:46         46  Emergency   Static Location   Toilet        0.8519  0.8519
+06:50         50  Emergency   Static Location   Toilet        0.8621  0.8621
+07:00         60  Emergency   Static Location   Toilet        0.8824  0.8824
+07:10         70  Emergency   Static Location   Toilet        0.8974  0.8974
+07:20         80  Emergency   Static Location   Toilet        0.9091  0.9091
+07:30         90  Emergency   Static Location   Toilet        0.9184  0.9184
+07:40        100  Emergency   Static Location   Toilet        0.9259  0.9259
+07:50        110  Emergency   Static Location   Toilet        0.9322  0.9322
+08:00        120  Emergency   Static Location   Toilet        0.9375  0.9375
+08:10        130  Emergency   Static Location   Toilet        0.9420  0.9420
+08:20        140  Emergency   Static Location   Toilet        0.9459  0.9459
+08:30        150  Emergency   Static Location   Toilet        0.9494  0.9494
+08:40        160  Emergency   Static Location   Toilet        0.9524  0.9524
+08:50        170  Emergency   Static Location   Toilet        0.9551  0.9551
+09:00        180  Emergency   Static Location   Toilet        0.9574  0.9574
+09:10        190  Emergency   Static Location   Toilet        0.9596  0.9596
+09:20        200  Emergency   Static Location   Toilet        0.9615  0.9615
+09:30        210  Emergency   Static Location   Toilet        0.9633  0.9633
+09:40        220  Emergency   Static Location   Toilet        0.9649  0.9649
+09:50        230  Emergency   Static Location   Toilet        0.9664  0.9664
+10:00        240  Emergency   Static Location   Toilet        0.9677  0.9677
+10:10        250  Emergency   Static Location   Toilet        0.9690  0.9690
+10:20        260  Emergency   Static Location   Toilet        0.9701  0.9701
+10:30        270  Emergency   Static Location   Toilet        0.9712  0.9712
+10:40        280  Emergency   Static Location   Toilet        0.9722  0.9722
+10:50        290  Emergency   Static Location   Toilet        0.9732  0.9732
+11:00        300  Emergency   Static Location   Toilet        0.9740  0.9740
+11:10        310  Emergency   Static Location   Toilet        0.9748  0.9748
+11:20        320  Emergency   Static Location   Toilet        0.9756  0.9756
+11:30        330  Emergency   Static Location   Toilet        0.9763  0.9763
+11:40        340  Emergency   Static Location   Toilet        0.9770  0.9770
+11:50        350  Emergency   Static Location   Toilet        0.9777  0.9777
+12:00        360  Emergency   Static Location   Toilet        0.9783  0.9783
+12:10        370  Emergency   Static Location   Toilet        0.9783  0.9783
+12:20        380  Emergency   Static Location   Toilet        0.9783  0.9783
+12:30        390  Emergency   Static Location   Toilet        0.9783  0.9783
+12:40        400  Emergency   Static Location   Toilet        0.9783  0.9783
+12:49        409  Normal      -                 -             0.0000  0.0000
+12:50        410  Normal      -                 -             0.0000  0.0000
+13:00        420  Normal      -                 -             0.0000  0.0000
+13:10        430  Normal      -                 -             0.0000  0.0000
+13:20        440  Normal      -                 -             0.0000  0.0000
+13:30        450  Normal      -                 -             0.0000  0.0000
+13:40        460  Normal      -                 -             0.0000  0.0000
