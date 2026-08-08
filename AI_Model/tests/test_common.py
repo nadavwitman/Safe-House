@@ -1,35 +1,38 @@
 """
-Shared helpers for the anomaly-scenario tests in tests_static/, tests_missing/,
-tests_frequency/: build a 24h baseline routine (the same generator used to make
-the training data), inject one specific anomaly into it, then roll the model's
-fixed 360-minute window across the day one minute at a time and log how the
-score evolves as the window slides from all-normal into fully covering the
-anomaly and back out.
+Shared helpers for the anomaly-scenario tests in new_model/tests_static/,
+new_model/tests_missing/, new_model/tests_frequency/ -- new-model variant of
+AI_Model/tests/test_common.py, pointed at the weighted-loss checkpoint and the
+model_handler.py in this folder instead of the original MSE-trained one.
 
-The real trained model only ever saw MinMax-scaled input (see
-Backend_Server/app/core/data_preprocessing.py), so every window here is scaled
-with the same scaler.pkl before being handed to evaluate_window. Columns 0-13
-(sensor_*/location_*) are exactly binary in the training data, so the scaler
-maps them 0->0 / 1->1 unchanged -- only the time columns actually get rescaled,
-and none of the anomaly-scoring logic reads those, so this doesn't change how
-the injected scenarios read out.
+Reuses AI_Model/tests/data_gen.py directly (added to sys.path below, lowest
+priority) so both variants generate scenarios from the exact same generator --
+no duplicated/diverging copy of it here.
 """
 import os
+import sys
 import numpy as np
 import joblib
 
-import data_gen
+THIS_DIR = os.path.dirname(os.path.abspath(__file__))   # AI_Model/tests/new_model
+TESTS_DIR = os.path.dirname(THIS_DIR)                     # AI_Model/tests
+
+# model_handler resolves from THIS_DIR, which the calling test script already put at the
+# front of sys.path -- import it before touching sys.path further.
 from model_handler import load_model, evaluate_window, WINDOW_SIZE, N_FEATURES
 
-TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(TESTS_DIR, "train", "best_safe_house_model.pth")
-SCALER_PATH = os.path.join(TESTS_DIR, "train", "scaler.pkl")
+# Appended (lowest priority), not inserted at 0: only here so `import data_gen` succeeds
+# (it doesn't exist in new_model/); must not shadow this folder's own model_handler.py.
+sys.path.append(TESTS_DIR)
+import data_gen
+
+MODEL_PATH = os.path.join(THIS_DIR, "best_safe_house_model_weighted.pth")
+SCALER_PATH = os.path.join(THIS_DIR, "scaler.pkl")
 
 MINUTES_PER_DAY = data_gen.MINUTES_PER_DAY  # 1440
 
 
 def load_trained():
-    """Real trained model + the MinMaxScaler it was trained with."""
+    """Weighted-loss-trained model + the MinMaxScaler it was trained with."""
     model = load_model(MODEL_PATH, seq_len=WINDOW_SIZE, n_features=N_FEATURES)
     scaler = joblib.load(SCALER_PATH)
     return model, scaler
@@ -49,14 +52,20 @@ def baseline_day(seed=1, day_of_week=2):
     return df
 
 
-def set_location(df, zone, start, end):
-    """Forces the sticky location one-hot to `zone` for [start, end) and fires a
-    zone-entry sensor pulse at `start` -- mirrors how data_gen derives events
-    from location transitions. Used for static-location scenarios."""
+def set_location(df, zone, start, end, fire_sensor=True):
+    """Forces the sticky location one-hot to `zone` for [start, end) and, unless
+    fire_sensor=False, fires a zone-entry sensor pulse at `start` -- mirrors how
+    data_gen derives events from location transitions. Used for static-location
+    scenarios.
+
+    fire_sensor=False leaves the sensor_* columns untouched (routine/baseline
+    values), so only the location vector shows the anomaly -- useful for
+    isolating how the model reacts to a location/sensor mismatch."""
     end = min(end, len(df))
     for i in range(7):
         df.loc[start:end - 1, f'location_{i}'] = 1 if i == zone else 0
-    df.loc[start, f'sensor_{zone}'] = 1
+    if fire_sensor:
+        df.loc[start, f'sensor_{zone}'] = 1
 
 
 def clear_sensor_events(df, zone, start, end):

@@ -1,91 +1,115 @@
-HIGH FREQUENCY -- repeated Toilet visits scenario
-Anomaly: a Toilet sensor pulse every 5min from 10:00-15:00 (far more distinct visit-starts than baseline). Rest of the day is a normal generated routine.
+HIGH FREQUENCY (new model) -- repeated Toilet visits scenario
+Anomaly: a Toilet sensor pulse every 5min from 07:00-23:00 (far more distinct visit-starts than baseline). Rest of the day is a normal generated routine.
 Rolling 360-minute window, 1-minute step: 1h of normal routine before the anomaly, the anomaly itself, and 1h after (to see recovery).
 
   now  win_start  severity    type              zone           score  focus_score
-09:00        180  Normal      -                 -             0.0000  0.0000
-09:05        185  Normal      -                 -             0.0000  0.0000
-09:10        190  Normal      -                 -             0.0000  0.0000
-09:15        195  Normal      -                 -             0.0000  0.0000
-09:20        200  Normal      -                 -             0.0000  0.0000
-09:25        205  Normal      -                 -             0.0000  0.0000
-09:30        210  Normal      -                 -             0.0000  0.0000
-09:35        215  Normal      -                 -             0.0000  0.0000
-09:40        220  Normal      -                 -             0.0000  0.0000
-09:45        225  Normal      -                 -             0.0000  0.0000
-09:50        230  Normal      -                 -             0.0000  0.0186
-09:55        235  Normal      -                 -             0.0000  0.0200
-10:00        240  Normal      -                 -             0.0000  0.0222
-10:05        245  Normal      -                 -             0.0000  0.2638
-10:10        250  Normal      -                 -             0.0000  0.4095
-10:15        255  Normal      -                 -             0.0000  0.5070
-10:20        260  Normal      -                 -             0.0000  0.5768
-10:25        265  Normal      -                 -             0.0000  0.6293
-10:26        266  Warning     High Frequency    Toilet        0.6701  0.6701
-10:30        270  Warning     High Frequency    Toilet        0.7028  0.7028
-10:35        275  Warning     High Frequency    Toilet        0.7297  0.7297
-10:40        280  Warning     High Frequency    Toilet        0.7521  0.7521
-10:45        285  Warning     High Frequency    Toilet        0.7711  0.7711
-10:50        290  Warning     High Frequency    Toilet        0.7874  0.7874
-10:55        295  Warning     High Frequency    Toilet        0.8015  0.8015
-11:00        300  Warning     High Frequency    Toilet        0.8139  0.8139
-11:05        305  Warning     High Frequency    Toilet        0.8248  0.8248
-11:10        310  Warning     High Frequency    Toilet        0.8345  0.8345
-11:15        315  Warning     High Frequency    Toilet        0.8432  0.8432
-11:20        320  Warning     High Frequency    Toilet        0.8510  0.8510
-11:25        325  Warning     High Frequency    Toilet        0.8580  0.8580
-11:30        330  Warning     High Frequency    Toilet        0.8645  0.8645
-11:35        335  Warning     High Frequency    Toilet        0.8703  0.8703
-11:40        340  Warning     High Frequency    Toilet        0.8757  0.8757
-11:45        345  Warning     High Frequency    Toilet        0.8806  0.8806
-11:50        350  Warning     High Frequency    Toilet        0.8852  0.8852
-11:55        355  Warning     High Frequency    Toilet        0.8894  0.8894
-12:00        360  Warning     High Frequency    Toilet        0.8934  0.8934
-12:05        365  Warning     High Frequency    Toilet        0.8970  0.8970
-12:10        370  Warning     High Frequency    Toilet        0.9004  0.9004
-12:15        375  Warning     High Frequency    Toilet        0.9036  0.9036
-12:20        380  Warning     High Frequency    Toilet        0.9067  0.9067
-12:25        385  Warning     High Frequency    Toilet        0.9095  0.9095
-12:30        390  Warning     High Frequency    Toilet        0.9121  0.9121
-12:35        395  Warning     High Frequency    Toilet        0.9146  0.9146
-12:40        400  Warning     High Frequency    Toilet        0.9170  0.9170
-12:45        405  Warning     High Frequency    Toilet        0.9192  0.9192
-12:50        410  Warning     High Frequency    Toilet        0.9191  0.9191
-12:55        415  Warning     High Frequency    Toilet        0.9212  0.9212
-13:00        420  Warning     High Frequency    Toilet        0.9232  0.9232
-13:05        425  Warning     High Frequency    Toilet        0.9232  0.9232
-13:10        430  Warning     High Frequency    Toilet        0.9232  0.9232
-13:15        435  Warning     High Frequency    Toilet        0.9231  0.9231
-13:20        440  Warning     High Frequency    Toilet        0.9231  0.9231
-13:25        445  Warning     High Frequency    Toilet        0.9231  0.9231
-13:30        450  Warning     High Frequency    Toilet        0.9210  0.9210
-13:35        455  Warning     High Frequency    Toilet        0.9210  0.9210
-13:40        460  Warning     High Frequency    Toilet        0.9210  0.9210
-13:45        465  Warning     High Frequency    Toilet        0.9210  0.9210
-13:50        470  Warning     High Frequency    Toilet        0.9210  0.9210
-13:55        475  Warning     High Frequency    Toilet        0.9210  0.9210
-14:00        480  Warning     High Frequency    Toilet        0.9210  0.9210
-14:05        485  Warning     High Frequency    Toilet        0.9210  0.9210
-14:10        490  Warning     High Frequency    Toilet        0.9209  0.9209
-14:15        495  Warning     High Frequency    Toilet        0.9209  0.9209
-14:20        500  Warning     High Frequency    Toilet        0.9209  0.9209
-14:25        505  Warning     High Frequency    Toilet        0.9209  0.9209
-14:30        510  Warning     High Frequency    Toilet        0.9209  0.9209
-14:35        515  Warning     High Frequency    Toilet        0.9209  0.9209
-14:40        520  Warning     High Frequency    Toilet        0.9209  0.9209
-14:45        525  Warning     High Frequency    Toilet        0.9209  0.9209
-14:50        530  Warning     High Frequency    Toilet        0.9209  0.9209
-14:55        535  Warning     High Frequency    Toilet        0.9209  0.9209
-15:00        540  Warning     High Frequency    Toilet        0.9209  0.9209
-15:05        545  Warning     High Frequency    Toilet        0.9188  0.9188
-15:10        550  Warning     High Frequency    Toilet        0.9165  0.9165
-15:15        555  Warning     High Frequency    Toilet        0.9142  0.9142
-15:20        560  Warning     High Frequency    Toilet        0.9116  0.9116
-15:25        565  Warning     High Frequency    Toilet        0.9090  0.9090
-15:30        570  Warning     High Frequency    Toilet        0.9061  0.9061
-15:35        575  Warning     High Frequency    Toilet        0.9031  0.9031
-15:40        580  Warning     High Frequency    Toilet        0.9031  0.9031
-15:45        585  Warning     High Frequency    Toilet        0.8999  0.8999
-15:50        590  Warning     High Frequency    Toilet        0.8965  0.8965
-15:55        595  Warning     High Frequency    Toilet        0.8929  0.8929
-16:00        600  Warning     High Frequency    Toilet        0.8889  0.8889
+06:00          0  Normal      -                 -             0.0000  0.0000
+06:10         10  Normal      -                 -             0.0000  0.0000
+06:20         20  Normal      -                 -             0.0000  0.0000
+06:30         30  Normal      -                 -             0.0000  0.0000
+06:40         40  Normal      -                 -             0.0000  0.0000
+06:50         50  Normal      -                 -             0.0000  0.0000
+07:00         60  Normal      -                 -             0.0000  0.0000
+07:10         70  Normal      -                 -             0.0000  0.4000
+07:20         80  Normal      -                 -             0.0000  0.5714
+07:26         86  Warning     High Frequency    Toilet        0.6667  0.6667
+07:30         90  Warning     High Frequency    Toilet        0.6667  0.6667
+07:40        100  Warning     High Frequency    Toilet        0.7273  0.7273
+07:50        110  Warning     High Frequency    Toilet        0.7692  0.7692
+08:00        120  Warning     High Frequency    Toilet        0.8000  0.8000
+08:10        130  Warning     High Frequency    Toilet        0.8235  0.8235
+08:20        140  Warning     High Frequency    Toilet        0.8421  0.8421
+08:30        150  Warning     High Frequency    Toilet        0.8571  0.8571
+08:40        160  Warning     High Frequency    Toilet        0.8750  0.8750
+08:50        170  Warning     High Frequency    Toilet        0.8846  0.8846
+09:00        180  Warning     High Frequency    Toilet        0.8966  0.8966
+09:10        190  Warning     High Frequency    Toilet        0.9000  0.9000
+09:20        200  Warning     High Frequency    Toilet        0.9062  0.9062
+09:30        210  Warning     High Frequency    Toilet        0.9118  0.9118
+09:40        220  Warning     High Frequency    Toilet        0.9167  0.9167
+09:50        230  Warning     High Frequency    Toilet        0.9211  0.9211
+10:00        240  Warning     High Frequency    Toilet        0.9250  0.9250
+10:10        250  Warning     High Frequency    Toilet        0.9250  0.9250
+10:20        260  Warning     High Frequency    Toilet        0.9250  0.9250
+10:30        270  Warning     High Frequency    Toilet        0.9268  0.9268
+10:40        280  Warning     High Frequency    Toilet        0.9268  0.9268
+10:50        290  Warning     High Frequency    Toilet        0.9268  0.9268
+11:00        300  Warning     High Frequency    Toilet        0.9268  0.9268
+11:10        310  Warning     High Frequency    Toilet        0.9268  0.9268
+11:20        320  Warning     High Frequency    Toilet        0.9268  0.9268
+11:30        330  Warning     High Frequency    Toilet        0.9268  0.9268
+11:40        340  Warning     High Frequency    Toilet        0.9250  0.9250
+11:50        350  Warning     High Frequency    Toilet        0.9250  0.9250
+12:00        360  Warning     High Frequency    Toilet        0.9250  0.9250
+12:10        370  Warning     High Frequency    Toilet        0.9250  0.9250
+12:20        380  Warning     High Frequency    Toilet        0.9250  0.9250
+12:30        390  Warning     High Frequency    Toilet        0.9250  0.9250
+12:40        400  Warning     High Frequency    Toilet        0.9250  0.9250
+12:50        410  Warning     High Frequency    Toilet        0.9250  0.9250
+13:00        420  Warning     High Frequency    Toilet        0.9250  0.9250
+13:10        430  Warning     High Frequency    Toilet        0.9250  0.9250
+13:20        440  Warning     High Frequency    Toilet        0.9250  0.9250
+13:30        450  Warning     High Frequency    Toilet        0.9231  0.9231
+13:40        460  Warning     High Frequency    Toilet        0.9231  0.9231
+13:50        470  Warning     High Frequency    Toilet        0.9231  0.9231
+14:00        480  Warning     High Frequency    Toilet        0.9231  0.9231
+14:10        490  Warning     High Frequency    Toilet        0.9231  0.9231
+14:20        500  Warning     High Frequency    Toilet        0.9231  0.9231
+14:30        510  Warning     High Frequency    Toilet        0.9231  0.9231
+14:40        520  Warning     High Frequency    Toilet        0.9231  0.9231
+14:50        530  Warning     High Frequency    Toilet        0.9231  0.9231
+15:00        540  Warning     High Frequency    Toilet        0.9231  0.9231
+15:10        550  Warning     High Frequency    Toilet        0.9231  0.9231
+15:20        560  Warning     High Frequency    Toilet        0.9231  0.9231
+15:30        570  Warning     High Frequency    Toilet        0.9231  0.9231
+15:40        580  Warning     High Frequency    Toilet        0.9231  0.9231
+15:50        590  Warning     High Frequency    Toilet        0.9231  0.9231
+16:00        600  Warning     High Frequency    Toilet        0.9231  0.9231
+16:10        610  Warning     High Frequency    Toilet        0.9231  0.9231
+16:20        620  Warning     High Frequency    Toilet        0.9231  0.9231
+16:30        630  Warning     High Frequency    Toilet        0.9231  0.9231
+16:40        640  Warning     High Frequency    Toilet        0.9231  0.9231
+16:50        650  Warning     High Frequency    Toilet        0.9231  0.9231
+17:00        660  Warning     High Frequency    Toilet        0.9231  0.9231
+17:10        670  Warning     High Frequency    Toilet        0.9231  0.9231
+17:20        680  Warning     High Frequency    Toilet        0.9231  0.9231
+17:30        690  Warning     High Frequency    Toilet        0.9231  0.9231
+17:40        700  Warning     High Frequency    Toilet        0.9231  0.9231
+17:50        710  Warning     High Frequency    Toilet        0.9231  0.9231
+18:00        720  Warning     High Frequency    Toilet        0.9231  0.9231
+18:10        730  Warning     High Frequency    Toilet        0.9231  0.9231
+18:20        740  Warning     High Frequency    Toilet        0.9231  0.9231
+18:30        750  Warning     High Frequency    Toilet        0.9231  0.9231
+18:40        760  Warning     High Frequency    Toilet        0.9231  0.9231
+18:50        770  Warning     High Frequency    Toilet        0.9231  0.9231
+19:00        780  Warning     High Frequency    Toilet        0.9231  0.9231
+19:10        790  Warning     High Frequency    Toilet        0.9231  0.9231
+19:20        800  Warning     High Frequency    Toilet        0.9231  0.9231
+19:30        810  Warning     High Frequency    Toilet        0.9231  0.9231
+19:40        820  Warning     High Frequency    Toilet        0.9231  0.9231
+19:50        830  Warning     High Frequency    Toilet        0.9231  0.9231
+20:00        840  Warning     High Frequency    Toilet        0.9231  0.9231
+20:10        850  Warning     High Frequency    Toilet        0.9231  0.9231
+20:20        860  Warning     High Frequency    Toilet        0.9231  0.9231
+20:30        870  Warning     High Frequency    Toilet        0.9231  0.9231
+20:40        880  Warning     High Frequency    Toilet        0.9250  0.9250
+20:50        890  Warning     High Frequency    Toilet        0.9231  0.9231
+21:00        900  Warning     High Frequency    Toilet        0.9231  0.9231
+21:10        910  Warning     High Frequency    Toilet        0.9211  0.9211
+21:20        920  Warning     High Frequency    Toilet        0.9231  0.9231
+21:30        930  Warning     High Frequency    Toilet        0.9231  0.9231
+21:40        940  Warning     High Frequency    Toilet        0.9231  0.9231
+21:50        950  Warning     High Frequency    Toilet        0.9231  0.9231
+22:00        960  Warning     High Frequency    Toilet        0.9231  0.9231
+22:10        970  Warning     High Frequency    Toilet        0.9231  0.9231
+22:20        980  Warning     High Frequency    Toilet        0.9231  0.9231
+22:30        990  Warning     High Frequency    Toilet        0.9231  0.9231
+22:40       1000  Warning     High Frequency    Toilet        0.9231  0.9231
+22:50       1010  Warning     High Frequency    Toilet        0.9231  0.9231
+23:00       1020  Warning     High Frequency    Toilet        0.9231  0.9231
+23:10       1030  Warning     High Frequency    Toilet        0.9189  0.9189
+23:20       1040  Warning     High Frequency    Toilet        0.9143  0.9143
+23:30       1050  Warning     High Frequency    Toilet        0.9062  0.9062
+23:40       1060  Warning     High Frequency    Toilet        0.9000  0.9000
+23:50       1070  Warning     High Frequency    Toilet        0.8929  0.8929
+00:00       1080  Warning     High Frequency    Toilet        0.8800  0.8800

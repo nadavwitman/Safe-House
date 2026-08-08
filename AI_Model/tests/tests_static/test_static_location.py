@@ -1,15 +1,16 @@
 """
-Static-location scenario: the resident is home the whole time but doesn't leave
-one room. A normal room stay is stretched into a long continuous stay -- long
-enough that as the rolling 360-minute window slides across it, current_run
-climbs past minimum_expected_run and the score should sweep Normal -> Warning
--> Emergency (Static Location is the only anomaly type allowed to reach
-Emergency).
+Static-location scenario, new-model variant -- location/sensor-mismatch flavor.
 
-Runs the same scenario for every zone that has 'static' enabled in
-model_handler.DEFAULT_SENSOR_CONFIG (Kitchen, Bathroom, Toilet, Bedroom,
-Living Room -- Door and Medications are never static-location scored, per
-spec), writing one results_static_<zone>.txt per zone.
+Unlike the paired plain scenario (routine sensor pulses + routine location, with
+the location vector alone stretched into a long stay), this variant forces the
+location vector into an anomalous stuck-in-zone stretch while leaving the
+sensor vector completely untouched (routine). The model sees a resident whose
+location trace says "still in the kitchen" for hours but whose sensor pulses
+keep firing on their normal routine schedule -- a location/sensor mismatch
+rather than a straightforward long stay.
+
+Same window for every zone: 06:00-07:00 routine, 07:00-23:00 anomaly,
+23:00-24:00 routine.
 """
 import os
 import sys
@@ -17,30 +18,33 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from test_common import load_trained, baseline_day, set_location, roll_and_log, clock
-from model_handler import DEFAULT_SENSOR_CONFIG, ZONE_NAMES
+from model_handler import ZONE_NAMES, KITCHEN, BATHROOM, TOILET, BEDROOM, LIVING_ROOM
 
-ANOMALY_START = 360      # 06:00
-# Stretch each zone's stay well past its own minimum_expected_run, capped so it
-# still fits in the day.
-DURATION_MARGIN = 400
-MAX_DURATION = 900
+MARGIN = 60  # 1h of routine logged before/after the anomaly, via roll_and_log's margin
+
+# zone -> (anomaly_start, anomaly_end), in minutes since midnight
+_WINDOW = (7 * 60, 23 * 60)
+ZONE_WINDOWS = {
+    KITCHEN:     _WINDOW,
+    BATHROOM:    _WINDOW,
+    TOILET:      _WINDOW,
+    BEDROOM:     _WINDOW,
+    LIVING_ROOM: _WINDOW,
+}
 
 
 def run_zone(model, scaler, zone):
-    cfg = DEFAULT_SENSOR_CONFIG[zone]
     zone_name = ZONE_NAMES[zone]
-    min_expected = cfg['minimum_expected_run']
-    duration = min(min_expected + DURATION_MARGIN, MAX_DURATION)
-    anomaly_end = ANOMALY_START + duration
+    anomaly_start, anomaly_end = ZONE_WINDOWS[zone]
 
-    df = baseline_day(seed=7)
-    set_location(df, zone, ANOMALY_START, anomaly_end)
+    df = baseline_day(seed=3)
+    set_location(df, zone, anomaly_start, anomaly_end, fire_sensor=False)
 
     header = [
-        f"STATIC LOCATION -- stuck-in-{zone_name} scenario",
-        f"Anomaly: continuous {zone_name} stay {clock(ANOMALY_START)}-{clock(anomaly_end)} "
-        f"({duration}min, vs a minimum_expected_run of {min_expected}min). Rest of the day "
-        "is a normal generated routine.",
+        f"STATIC LOCATION (new model) -- location/sensor mismatch, stuck-in-{zone_name}",
+        f"Anomaly: location vector pinned to {zone_name} {clock(anomaly_start)}-{clock(anomaly_end)} "
+        "while the sensor vector is left untouched (routine schedule, no forced zone-entry "
+        "pulse). Rest of the day is a normal generated routine.",
         "Rolling 360-minute window, 1-minute step: 1h of normal routine before the "
         "anomaly, the anomaly itself, and 1h after (to see recovery).",
     ]
@@ -48,15 +52,14 @@ def run_zone(model, scaler, zone):
     out_path = os.path.join(os.path.dirname(__file__), fname)
     roll_and_log(model, scaler, df, out_path, header, log_interval=10,
                  focus=('static_location', zone),
-                 anomaly_start=ANOMALY_START, anomaly_end=anomaly_end)
+                 anomaly_start=anomaly_start, anomaly_end=anomaly_end, margin=MARGIN)
     print(f"wrote {out_path}")
 
 
 def main():
     model, scaler = load_trained()
-    for zone, cfg in DEFAULT_SENSOR_CONFIG.items():
-        if 'static' in cfg['enabled']:
-            run_zone(model, scaler, zone)
+    for zone in ZONE_WINDOWS:
+        run_zone(model, scaler, zone)
 
 
 if __name__ == "__main__":
