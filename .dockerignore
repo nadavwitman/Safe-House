@@ -1,6 +1,6 @@
 # Secrets — inject these at runtime via AWS env vars / Secrets Manager
-.env
-database/firebase-credentials.json
+Backend_Server/.env
+Backend_Server/database/firebase-credentials.json
 
 # Python artifacts
 __pycache__/
@@ -10,13 +10,16 @@ __pycache__/
 .Python
 
 # Dev / test files
-tests/
-test.py
-test_iot_ping.py
-scheduler_main.py
-run.py
+Backend_Server/tests/
+Backend_Server/scripts/
 
 # Virtual environment
-venv/
-.venv/
-env/
+Backend_Server/venv/
+Backend_Server/.venv/
+Backend_Server/env/
+
+# Non-backend project directories not needed in this image
+front/
+front_demo/
+IoT_Hardware/
+Docs/

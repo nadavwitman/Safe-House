@@ -7,7 +7,7 @@ from google import genai
 from google.genai import types
 
 import database.database as database
-from app.core.house_mask_store import house_mask_store
+from app.state.house_mask_store import house_mask_store
 from app.weekly_summary.aggregator import aggregate_weekly_metrics
 from app.weekly_summary.baseline import (
     compute_weekly_averages_for_baseline,

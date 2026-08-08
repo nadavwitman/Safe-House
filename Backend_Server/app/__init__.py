@@ -104,7 +104,7 @@ def _setup_scheduler():
         """Auto-activates/deactivates vacation mode based on stored schedules."""
         from datetime import datetime
         import database.user_db as _user_db
-        from app.core.data_buffer import sensor_buffer
+        from app.state.data_buffer import sensor_buffer
 
         try:
             house_ids = _user_db.get_all_active_house_ids()
@@ -134,7 +134,7 @@ def _setup_scheduler():
         except Exception as e:
             print(f"[Scheduler] Fatal error in check_vacation_schedules: {e}")
 
-    from app.core.device_health import check_device_connectivity, check_sensor_health
+    from app.monitoring.device_health import check_device_connectivity, check_sensor_health
 
     scheduler = BackgroundScheduler(daemon=True)
     scheduler.add_job(

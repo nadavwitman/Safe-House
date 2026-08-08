@@ -5,8 +5,8 @@ from concurrent.futures import ThreadPoolExecutor
 import torch  # kept so unpickling serialized torch models resolves cleanly
 from firebase_admin import storage
 from database.database import db, fetch_finetuning_data
-from app.core.house_mask_store import house_mask_store
-from app.core.ai_handler import fine_tune_house_model
+from app.state.house_mask_store import house_mask_store
+from app.ai.fine_tuning import fine_tune_house_model
 
 # Global In-Memory Cache (RAM) to store loaded house models
 HOUSES_MODELS_CACHE = {}

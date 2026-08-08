@@ -1,12 +1,12 @@
 from flask import Blueprint, request, jsonify
-from app.core.data_buffer import sensor_buffer
-from app.core.house_mask_store import house_mask_store
+from app.state.data_buffer import sensor_buffer
+from app.state.house_mask_store import house_mask_store
 import database.database as database
 import database.user_db as user_db
-from app.core import notifications
-from app.core.ai_handler import evaluate_buffer_with_AI
-import app.core.device_health as device_health
-from app.core import alert_messages
+from app.alerts import notifications
+from app.ai.inference import evaluate_buffer_with_AI
+import app.monitoring.device_health as device_health
+from app.alerts import alert_messages
 
 # Import the global cache dictionary and download helper from your manager
 from app.weekly_summary.model_manager import HOUSES_MODELS_CACHE, download_model_from_firebase
@@ -193,19 +193,13 @@ def analyze_data():
             faulty_names = [device_health.SENSOR_NAMES.get(i, f'Sensor {i}')
                             for i in sorted(faulty_idx)]
             resident_name = house.get('resident_name') if house else None
-            # The real "last seen" time = the most recent moment any sensor fired, so the
-            # Stuck/Fall message reports actual last activity (possibly days ago) instead of
-            # the alert time. It's already on the house doc fetched above — no extra read.
-            last_activity_map = (house or {}).get('last_sensor_activity') or {}
-            last_seen_dt = max(last_activity_map.values(), default=None)
             # Compose a focused, situation-specific message from the AI's structured
-            # verdict (severity + activity type + worst-reconstructed room + last location).
+            # verdict (severity + anomaly type + zone + last location).
             title, body = alert_messages.compose_alert_message(
                 severity=final_decision,
                 activity_type=ai_meta.get('activity_type'),
                 room_index=ai_meta.get('room_index'),
                 resident_name=resident_name,
-                last_seen_dt=last_seen_dt,
                 last_location=data.get('current_location'),
                 faulty_sensor_names=faulty_names,
             )

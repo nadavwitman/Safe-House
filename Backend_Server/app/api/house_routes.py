@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from app.core.house_mask_store import house_mask_store
+from app.state.house_mask_store import house_mask_store
 from app.auth.decorators import admin_required, house_member_required
 import database.database as database
 
