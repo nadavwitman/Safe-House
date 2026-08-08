@@ -1,5 +1,5 @@
 MISSING USAGE (new model) -- Bathroom never used scenario
-Anomaly: every Bathroom sensor pulse removed 07:00-23:00. Rest of the day (location, other sensors) is a normal generated routine.
+Anomaly: every Bathroom sensor pulse removed 03:00-23:00. Rest of the day (location, other sensors) is a normal generated routine.
 Rolling 360-minute window, 1-minute step: routine before/after the anomaly, and the anomaly itself.
 
   now  win_start  severity    type              zone           score  focus_score
@@ -24,10 +24,12 @@ Rolling 360-minute window, 1-minute step: routine before/after the anomaly, and 
 09:00        180  Normal      -                 -             0.0000  0.0000
 09:10        190  Normal      -                 -             0.0000  0.0000
 09:20        200  Normal      -                 -             0.0000  0.0000
-09:30        210  Normal      -                 -             0.0000  0.0000
-09:40        220  Normal      -                 -             0.0000  0.0000
-09:50        230  Normal      -                 -             0.0000  0.0000
-10:00        240  Normal      -                 -             0.0000  0.0000
+09:23        203  Warning     Missing Usage     Bathroom      0.6667  0.6667
+09:30        210  Warning     Missing Usage     Bathroom      0.9091  0.9091
+09:40        220  Warning     Missing Usage     Bathroom      0.9524  0.9524
+09:50        230  Warning     Missing Usage     Bathroom      0.9545  0.9545
+10:00        240  Warning     Missing Usage     Bathroom      0.9091  0.9091
+10:09        249  Normal      -                 -             0.0000  0.5000
 10:10        250  Normal      -                 -             0.0000  0.0000
 10:20        260  Normal      -                 -             0.0000  0.0000
 10:30        270  Normal      -                 -             0.0000  0.0000

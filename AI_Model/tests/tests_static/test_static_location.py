@@ -9,27 +9,31 @@ location trace says "still in the kitchen" for hours but whose sensor pulses
 keep firing on their normal routine schedule -- a location/sensor mismatch
 rather than a straightforward long stay.
 
-Same window for every zone: 06:00-07:00 routine, 07:00-23:00 anomaly,
-23:00-24:00 routine.
+Every zone except Living Room: 06:00-07:00 routine, 07:00-23:00 anomaly, 23:00-24:00
+routine. Living Room instead gets an overnight anomaly (23:00-07:00) -- stuck there
+through the night is the anomalous case for that zone, not stuck there during the day.
 """
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from test_common import load_trained, baseline_day, set_location, roll_and_log, clock
+from test_common import load_trained, baseline_day, extend_with_night, set_location, roll_and_log, clock
 from model_handler import ZONE_NAMES, KITCHEN, BATHROOM, TOILET, BEDROOM, LIVING_ROOM
 
-MARGIN = 60  # 1h of routine logged before/after the anomaly, via roll_and_log's margin
+MARGIN = 60            # 1h of routine logged before/after the anomaly, via roll_and_log's margin
+NIGHT_EXTENSION = 480  # minutes of day 1's start (00:00 on) replayed onto the end, so
+                        # windows can roll past 24:00 into the next morning
 
 # zone -> (anomaly_start, anomaly_end), in minutes since midnight
 _WINDOW = (7 * 60, 23 * 60)
+_NIGHT_WINDOW = (23 * 60, 23 * 60 + 8 * 60)  # 23:00 -> 07:00 next day
 ZONE_WINDOWS = {
     KITCHEN:     _WINDOW,
     BATHROOM:    _WINDOW,
     TOILET:      _WINDOW,
     BEDROOM:     _WINDOW,
-    LIVING_ROOM: _WINDOW,
+    LIVING_ROOM: _NIGHT_WINDOW,
 }
 
 
@@ -38,6 +42,7 @@ def run_zone(model, scaler, zone):
     anomaly_start, anomaly_end = ZONE_WINDOWS[zone]
 
     df = baseline_day(seed=3)
+    df = extend_with_night(df, NIGHT_EXTENSION)
     set_location(df, zone, anomaly_start, anomaly_end, fire_sensor=False)
 
     header = [

@@ -1,32 +1,32 @@
 """
-Shared helpers for the anomaly-scenario tests in new_model/tests_static/,
-new_model/tests_missing/, new_model/tests_frequency/ -- new-model variant of
-AI_Model/tests/test_common.py, pointed at the weighted-loss checkpoint and the
-model_handler.py in this folder instead of the original MSE-trained one.
+Shared helpers for the anomaly-scenario tests in tests_static/, tests_missing/,
+tests_frequency/, pointed at the weighted-loss checkpoint in AI_Model/model/
+and the model_handler.py in AI_Model/.
 
-Reuses AI_Model/tests/data_gen.py directly (added to sys.path below, lowest
-priority) so both variants generate scenarios from the exact same generator --
-no duplicated/diverging copy of it here.
+Reuses AI_Model/tests/data/data_gen.py directly (added to sys.path below,
+lowest priority) so scenario generation stays a single source of truth.
 """
 import os
 import sys
 import numpy as np
+import pandas as pd
 import joblib
 
-THIS_DIR = os.path.dirname(os.path.abspath(__file__))   # AI_Model/tests/new_model
-TESTS_DIR = os.path.dirname(THIS_DIR)                     # AI_Model/tests
+THIS_DIR = os.path.dirname(os.path.abspath(__file__))       # AI_Model/tests
+AI_MODEL_DIR = os.path.dirname(THIS_DIR)                     # AI_Model
+DATA_DIR = os.path.join(THIS_DIR, "data")                     # AI_Model/tests/data
 
-# model_handler resolves from THIS_DIR, which the calling test script already put at the
-# front of sys.path -- import it before touching sys.path further.
+# Inserted at front: model_handler.py lives one level up, in AI_Model/.
+sys.path.insert(0, AI_MODEL_DIR)
 from model_handler import load_model, evaluate_window, WINDOW_SIZE, N_FEATURES
 
-# Appended (lowest priority), not inserted at 0: only here so `import data_gen` succeeds
-# (it doesn't exist in new_model/); must not shadow this folder's own model_handler.py.
-sys.path.append(TESTS_DIR)
+# Appended (lowest priority), not inserted at 0: only here so `import data_gen` succeeds;
+# must not shadow AI_Model/model_handler.py.
+sys.path.append(DATA_DIR)
 import data_gen
 
-MODEL_PATH = os.path.join(THIS_DIR, "best_safe_house_model_weighted.pth")
-SCALER_PATH = os.path.join(THIS_DIR, "scaler.pkl")
+MODEL_PATH = os.path.join(AI_MODEL_DIR, "model", "best_safe_house_model.pth")
+SCALER_PATH = os.path.join(AI_MODEL_DIR, "model", "scaler.pkl")
 
 MINUTES_PER_DAY = data_gen.MINUTES_PER_DAY  # 1440
 
@@ -50,6 +50,13 @@ def baseline_day(seed=1, day_of_week=2):
     rng = np.random.default_rng(seed)
     df, _ = data_gen.generate_day(data_gen.PROFILE, day_of_week=day_of_week, rng=rng)
     return df
+
+
+def extend_with_night(df, extra_minutes):
+    """Appends df's own first extra_minutes (00:00 onward, i.e. night/early morning)
+    to its end, index-reset, so a roll_and_log margin can run a few hours past 24:00
+    without generating a whole second day."""
+    return pd.concat([df, df.iloc[:extra_minutes]], ignore_index=True)
 
 
 def set_location(df, zone, start, end, fire_sensor=True):

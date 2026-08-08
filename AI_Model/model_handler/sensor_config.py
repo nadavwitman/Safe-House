@@ -40,7 +40,7 @@ DEFAULT_SENSOR_CONFIG = {
     KITCHEN: _cfg(
         enabled={'static', 'missing', 'frequency'},
         minimum_expected_run=60,
-        missing_grace=120, missing_tolerance=2.0,
+        missing_grace=120, missing_tolerance=1.0,
         frequency_lookback=180, frequency_tolerance=5,
         hosting_suppression=True,
     ),
@@ -48,7 +48,7 @@ DEFAULT_SENSOR_CONFIG = {
         enabled={'static', 'missing', 'frequency'},
         # Real visits run up to ~22min (p99) -- shower included.
         minimum_expected_run=30,
-        missing_grace=90, missing_tolerance=2.0,
+        missing_grace=90, missing_tolerance=1.0,
         frequency_lookback=240, frequency_tolerance=4,
         hosting_suppression=True,
     ),

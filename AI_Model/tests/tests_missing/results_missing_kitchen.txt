@@ -27,18 +27,18 @@ Rolling 360-minute window, 1-minute step: routine before/after the anomaly, and 
 09:30        210  Normal      -                 -             0.0000  0.0000
 09:40        220  Normal      -                 -             0.0000  0.0000
 09:50        230  Normal      -                 -             0.0000  0.0000
-09:59        239  Warning     Missing Usage     Kitchen       0.6667  0.6667
-10:00        240  Warning     Missing Usage     Kitchen       0.7143  0.7143
-10:10        250  Warning     Missing Usage     Kitchen       0.8824  0.8824
-10:20        260  Warning     Missing Usage     Kitchen       0.9259  0.9259
-10:30        270  Warning     Missing Usage     Kitchen       0.9375  0.9375
-10:40        280  Warning     Missing Usage     Kitchen       0.9375  0.9375
-10:50        290  Warning     Missing Usage     Kitchen       0.9375  0.9375
-11:00        300  Warning     Missing Usage     Kitchen       0.9375  0.9375
-11:10        310  Warning     Missing Usage     Kitchen       0.9375  0.9375
-11:20        320  Warning     Missing Usage     Kitchen       0.9048  0.9048
-11:30        330  Warning     Missing Usage     Kitchen       0.8000  0.8000
-11:34        334  Normal      -                 -             0.0000  0.6000
+09:57        237  Warning     Missing Usage     Kitchen       0.6667  0.6667
+10:00        240  Warning     Missing Usage     Kitchen       0.8333  0.8333
+10:10        250  Warning     Missing Usage     Kitchen       0.9375  0.9375
+10:20        260  Warning     Missing Usage     Kitchen       0.9615  0.9615
+10:30        270  Warning     Missing Usage     Kitchen       0.9677  0.9677
+10:40        280  Warning     Missing Usage     Kitchen       0.9677  0.9677
+10:50        290  Warning     Missing Usage     Kitchen       0.9677  0.9677
+11:00        300  Warning     Missing Usage     Kitchen       0.9677  0.9677
+11:10        310  Warning     Missing Usage     Kitchen       0.9677  0.9677
+11:20        320  Warning     Missing Usage     Kitchen       0.9500  0.9500
+11:30        330  Warning     Missing Usage     Kitchen       0.8889  0.8889
+11:36        336  Normal      -                 -             0.0000  0.0000
 11:40        340  Normal      -                 -             0.0000  0.0000
 11:50        350  Normal      -                 -             0.0000  0.0000
 12:00        360  Normal      -                 -             0.0000  0.0000
@@ -60,26 +60,26 @@ Rolling 360-minute window, 1-minute step: routine before/after the anomaly, and 
 14:40        520  Normal      -                 -             0.0000  0.0000
 14:50        530  Normal      -                 -             0.0000  0.0000
 15:00        540  Normal      -                 -             0.0000  0.0000
-15:10        550  Normal      -                 -             0.0000  0.6000
-15:11        551  Warning     Missing Usage     Kitchen       0.6667  0.6667
-15:20        560  Warning     Missing Usage     Kitchen       0.8667  0.8667
-15:30        570  Warning     Missing Usage     Kitchen       0.9167  0.9167
-15:40        580  Warning     Missing Usage     Kitchen       0.9375  0.9375
-15:50        590  Warning     Missing Usage     Kitchen       0.9375  0.9375
-16:00        600  Warning     Missing Usage     Kitchen       0.9375  0.9375
-16:10        610  Warning     Missing Usage     Kitchen       0.9375  0.9375
-16:20        620  Warning     Missing Usage     Kitchen       0.9375  0.9375
-16:30        630  Warning     Missing Usage     Kitchen       0.9375  0.9375
-16:40        640  Warning     Missing Usage     Kitchen       0.9375  0.9375
-16:50        650  Warning     Missing Usage     Kitchen       0.9375  0.9375
-17:00        660  Warning     Missing Usage     Kitchen       0.9375  0.9375
-17:10        670  Warning     Missing Usage     Kitchen       0.9375  0.9375
-17:20        680  Warning     Missing Usage     Kitchen       0.9375  0.9375
-17:30        690  Warning     Missing Usage     Kitchen       0.9375  0.9375
-17:40        700  Warning     Missing Usage     Kitchen       0.9091  0.9091
-17:50        710  Warning     Missing Usage     Kitchen       0.8571  0.8571
-18:00        720  Warning     Missing Usage     Kitchen       0.7143  0.7143
-18:03        723  Normal      -                 -             0.0000  0.6000
+15:09        549  Warning     Missing Usage     Kitchen       0.6667  0.6667
+15:10        550  Warning     Missing Usage     Kitchen       0.7500  0.7500
+15:20        560  Warning     Missing Usage     Kitchen       0.9286  0.9286
+15:30        570  Warning     Missing Usage     Kitchen       0.9565  0.9565
+15:40        580  Warning     Missing Usage     Kitchen       0.9677  0.9677
+15:50        590  Warning     Missing Usage     Kitchen       0.9677  0.9677
+16:00        600  Warning     Missing Usage     Kitchen       0.9677  0.9677
+16:10        610  Warning     Missing Usage     Kitchen       0.9677  0.9677
+16:20        620  Warning     Missing Usage     Kitchen       0.9677  0.9677
+16:30        630  Warning     Missing Usage     Kitchen       0.9677  0.9677
+16:40        640  Warning     Missing Usage     Kitchen       0.9677  0.9677
+16:50        650  Warning     Missing Usage     Kitchen       0.9677  0.9677
+17:00        660  Warning     Missing Usage     Kitchen       0.9677  0.9677
+17:10        670  Warning     Missing Usage     Kitchen       0.9677  0.9677
+17:20        680  Warning     Missing Usage     Kitchen       0.9677  0.9677
+17:30        690  Warning     Missing Usage     Kitchen       0.9677  0.9677
+17:40        700  Warning     Missing Usage     Kitchen       0.9524  0.9524
+17:50        710  Warning     Missing Usage     Kitchen       0.9231  0.9231
+18:00        720  Warning     Missing Usage     Kitchen       0.8333  0.8333
+18:05        725  Normal      -                 -             0.0000  0.5000
 18:10        730  Normal      -                 -             0.0000  0.0000
 18:20        740  Normal      -                 -             0.0000  0.0000
 18:30        750  Normal      -                 -             0.0000  0.0000
