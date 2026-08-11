@@ -1,3 +1,8 @@
+# CPU-only PyTorch build — this server has no GPU, and the default index pulls
+# several GB of unused CUDA/cuDNN/triton packages that don't fit on the box.
+--index-url https://download.pytorch.org/whl/cpu
+--extra-index-url https://pypi.org/simple
+
 # --- Core Web & Server ---
 Flask==3.0.0
 requests==2.32.5

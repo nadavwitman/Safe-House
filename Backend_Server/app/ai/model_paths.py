@@ -3,8 +3,14 @@ import sys
 
 BASE_DIR = os.path.dirname(__file__)
 
-# AI_Model lives at the repo root, three levels up from app/ai.
-AI_MODEL_DIR = os.path.abspath(os.path.join(BASE_DIR, "../../../AI_Model"))
+# AI_Model lives at the repo root, three levels up from app/ai in local dev
+# (Backend_Server/app/ai -> Backend_Server/app -> Backend_Server -> repo root).
+# The Docker image copies AI_Model/ one level shallower (directly under /app,
+# sibling of app/ — see Dockerfile), so AI_MODEL_DIR is overridden via env var there.
+AI_MODEL_DIR = os.environ.get(
+    "AI_MODEL_DIR",
+    os.path.abspath(os.path.join(BASE_DIR, "../../../AI_Model")),
+)
 sys.path.insert(0, AI_MODEL_DIR)
 from model_handler import (
     LSTMAnomalyDetector, evaluate_window, DEFAULT_SENSOR_CONFIG,

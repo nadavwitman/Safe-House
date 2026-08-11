@@ -3,7 +3,7 @@ import pickle
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
 import torch  # kept so unpickling serialized torch models resolves cleanly
-from firebase_admin import storage
+from firebase_admin import storage, firestore
 from database.database import db, fetch_finetuning_data
 from app.state.house_mask_store import house_mask_store
 from app.ai.fine_tuning import fine_tune_house_model
@@ -12,7 +12,18 @@ from app.ai.fine_tuning import fine_tune_house_model
 HOUSES_MODELS_CACHE = {}
 
 # Bounded capacity for the concurrent worker pool to throttle CPU/RAM usage
-MAX_CONCURRENT_WORKERS = 2  # Scaled down to 2 since PyTorch training consumes more resources than network I/O
+MAX_CONCURRENT_WORKERS = 1  # One house at a time — the gunicorn process only has a
+# single worker (APScheduler runs in-process, see Dockerfile), so PyTorch training
+# competes for the same CPU/GIL as live sensor requests. Keeping this at 1 leaves
+# headroom for /api/analyze to keep responding to real sensor traffic during a run.
+
+# Hard cap on how many houses get fine-tuned in a single pipeline run. Each house costs
+# ~1 Firestore read per sensor reading in its 14-day training window (tens of thousands
+# on a per-minute feed) — with no cap, a backlog of overdue houses (e.g. this pipeline's
+# very first run, where every house looks overdue at once) fetches all of them in one
+# shot and can exhaust the Firestore free-tier daily quota in a couple of hours. Capping
+# to 1 spreads a large backlog across multiple nightly runs instead.
+MAX_HOUSES_PER_RUN = 1
 
 
 def download_model_from_firebase(house_id):
@@ -39,16 +50,34 @@ def download_model_from_firebase(house_id):
         return None
 
 
+MIN_TRAINING_SPAN_DAYS = 14  # require the full 14-day window of real, non-vacation data
+
+
 def auto_train_house_model(house_id):
     """
     Background worker that fetches data, delegates fine-tuning to the AI handler,
     and uploads the newly blended model directly to Firebase Storage.
+
+    Returns True on a successful persisted retrain, False otherwise (including
+    "correctly skipped" cases), so the caller can report real success/failure counts.
     """
     print(f"[MLOps Worker] Initiating automated retraining sequence for house: {house_id}")
     try:
         # 1. Fetch the last 14 days of sensor vectors from the correct Firestore subcollection
         raw_training_data = fetch_finetuning_data(house_id)
-        
+
+        # Guard against training on a thin, mostly-vacation slice: is_vacation rows are
+        # already filtered out by fetch_finetuning_data, but that alone doesn't guarantee
+        # the remaining rows actually span the full 14-day window.
+        if raw_training_data:
+            span_days = (raw_training_data[-1]['time'] - raw_training_data[0]['time']).total_seconds() / 86400
+        else:
+            span_days = 0
+        if span_days < MIN_TRAINING_SPAN_DAYS:
+            print(f"[MLOps Worker] Skipping {house_id}: only {span_days:.1f} days of non-vacation "
+                  f"data (< {MIN_TRAINING_SPAN_DAYS} required).")
+            return False
+
         # 2. Fetch house mask
         house_mask = house_mask_store.get_mask(house_id)
 
@@ -65,7 +94,7 @@ def auto_train_house_model(house_id):
 
         if updated_model is None:
             print(f"[MLOps Worker] Fine-tuning aborted or failed for {house_id}.")
-            return
+            return False
 
         # 5. Serialize the returned updated PyTorch model
         buffer = io.BytesIO()
@@ -81,16 +110,36 @@ def auto_train_house_model(house_id):
         current_metadata = db.collection('houses').document(house_id).get().to_dict().get('model_metadata', {})
         current_count = current_metadata.get('fine_tune_count', 0)
 
-        # 7. Update metadata in Firestore with the incremented counter
+        # 7. Update metadata in Firestore with the incremented counter. Also zero out
+        # vacation_days_total — it tracks vacation time accrued since the LAST
+        # fine-tune (see database/repositories/vacation.py), so a fresh retrain resets
+        # the clock on it.
         db.collection('houses').document(house_id).update({
             'model_metadata.last_retrained': datetime.utcnow(),
             'model_metadata.status': 'fully_trained',
-            'model_metadata.fine_tune_count': current_count + 1  # <--- מקדם את המונה!
+            'model_metadata.fine_tune_count': current_count + 1,  # <--- מקדם את המונה!
+            'model_metadata.last_error': firestore.DELETE_FIELD,
+            'vacation_days_total': 0,
         })
+
+        # 8. Make the freshly trained model immediately available to inference on this
+        # process, instead of waiting for a blanket cache clear + Firebase re-download.
+        HOUSES_MODELS_CACHE[house_id] = updated_model
+
         print(f"[MLOps Worker] Cloud sync successful! {house_id} updated (Generation: {current_count + 1}).")
+        return True
 
     except Exception as e:
         print(f"[MLOps Worker] Critical execution failure on house thread {house_id}: {str(e)}")
+        try:
+            db.collection('houses').document(house_id).update({
+                'model_metadata.status': 'failed',
+                'model_metadata.last_error': str(e),
+                'model_metadata.last_error_at': datetime.utcnow(),
+            })
+        except Exception as meta_err:
+            print(f"[MLOps Worker] Also failed to record failure metadata for {house_id}: {meta_err}")
+        return False
 
 def run_weekly_mlops_pipeline_scalable():
     """
@@ -108,34 +157,60 @@ def run_weekly_mlops_pipeline_scalable():
     
     for house in active_houses:
         house_data = house.to_dict() or {}
+
+        # Never fine-tune a house that's currently on vacation — its recent buffer is
+        # paused/cleared and not representative of the resident's real routine.
+        if house_data.get('is_vacation', False):
+            print(f"[MLOps Engine] House {house.id} is currently in vacation mode. Skipping.")
+            continue
+
         model_metadata = house_data.get('model_metadata', {})
         last_retrained = model_metadata.get('last_retrained')
-        
-        # 14-Day Frequency Guard
+
+        # 14-Day Frequency Guard. vacation_days_total (accrued since the last successful
+        # fine-tune, reset to 0 there — see auto_train_house_model / vacation.py) is
+        # already sitting on house_data for free, so this whole check costs zero extra
+        # Firestore reads — it only queues houses that plausibly HAVE 14 real days,
+        # instead of finding out after paying for the full raw-data fetch.
         if last_retrained:
             # Safely handle timezone-aware datetimes from Firestore
             if last_retrained.tzinfo is None:
                 last_retrained = last_retrained.replace(tzinfo=timezone.utc)
-                
-            days_since_last_train = (current_time - last_retrained).days
-            
-            if days_since_last_train < 14:
-                print(f"[MLOps Engine] House {house.id} was trained {days_since_last_train} days ago. Skipping (needs 14 days).")
+
+            calendar_days_since_train = (current_time - last_retrained).days
+            vacation_days = house_data.get('vacation_days_total', 0)
+            effective_days_since_train = calendar_days_since_train - vacation_days
+
+            if effective_days_since_train < 14:
+                print(f"[MLOps Engine] House {house.id}: {calendar_days_since_train} calendar days "
+                      f"since last train, {vacation_days:.1f} of them vacation "
+                      f"({effective_days_since_train:.1f} real days). Skipping (needs 14).")
                 continue # Skip this house and move to the next one
-                
-        # If it hasn't been trained yet, or 14+ days have passed, queue it for training
+
+        # If it hasn't been trained yet, or 14+ effective days have passed, queue it
         house_ids_to_train.append(house.id)
 
     if not house_ids_to_train:
         print("[MLOps Engine] Execution halted: Zero houses require retraining this week.")
         return
 
+    # Cap to MAX_HOUSES_PER_RUN — see its definition for why. A larger backlog just
+    # rolls over to the next run instead of trying to do it all in one shot.
+    if len(house_ids_to_train) > MAX_HOUSES_PER_RUN:
+        print(f"[MLOps Engine] {len(house_ids_to_train)} houses need updates — processing "
+              f"{MAX_HOUSES_PER_RUN} this run, rest roll over to the next.")
+        house_ids_to_train = house_ids_to_train[:MAX_HOUSES_PER_RUN]
+
     print(f"[MLOps Engine] Discovered {len(house_ids_to_train)} houses requiring updates. Dispatching jobs to Worker Pool...")
 
-    # Execute the retraining concurrently
+    # Execute the retraining concurrently. Each worker returns True/False so the engine
+    # can report real success/failure counts instead of always claiming a clean run —
+    # auto_train_house_model catches its own exceptions to keep one bad house from
+    # aborting the others, so this is the only place that sees the outcome.
     with ThreadPoolExecutor(max_workers=MAX_CONCURRENT_WORKERS) as executor:
-        executor.map(auto_train_house_model, house_ids_to_train)
+        results = list(executor.map(auto_train_house_model, house_ids_to_train))
 
-    # Cache Invalidation step to force online endpoints to reload fresh weights on upcoming requests
-    HOUSES_MODELS_CACHE.clear()
-    print("[MLOps Engine] Global pipeline completed cleanly. RAM Cache cleared and sync ready.")
+    succeeded = sum(1 for r in results if r)
+    failed = len(results) - succeeded
+    print(f"[MLOps Engine] Global pipeline finished: {succeeded} succeeded, {failed} failed/skipped "
+          f"out of {len(house_ids_to_train)} candidate houses.")

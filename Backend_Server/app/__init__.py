@@ -59,11 +59,17 @@ def _setup_scheduler():
     import database.database as database
     from app.weekly_summary.report_generator import run_insights_pipeline
 
+    def scheduled_nightly_fine_tuning():
+        """Checks every active house nightly and fine-tunes any that are 14+ days overdue."""
+        try:
+            from app.ai.model_manager import run_weekly_mlops_pipeline_scalable
+            run_weekly_mlops_pipeline_scalable()
+        except Exception as e:
+            print(f"[Scheduler] Fatal error in scheduled_nightly_fine_tuning: {e}")
+
     def scheduled_weekly_insights():
         """Generates weekly wellness reports for every active house."""
         try:
-            from app.weekly_summary.model_manager import run_weekly_mlops_pipeline_scalable
-            run_weekly_mlops_pipeline_scalable()
             import database.user_db as user_db
             house_ids = user_db.get_all_active_house_ids()
             if not house_ids:
@@ -144,6 +150,17 @@ def _setup_scheduler():
         replace_existing=True,
         misfire_grace_time=3600,  # Fire up to 1h late if server was down at 06:00
     )
+    # Nightly, not weekly: checks every active house and fine-tunes any that are 14+
+    # days overdue (or in vacation mode / lacking a full 14-day data span get skipped
+    # inside the pipeline). Decoupled from weekly_insights so a report failure can't
+    # block retraining and vice versa.
+    scheduler.add_job(
+        func=scheduled_nightly_fine_tuning,
+        trigger=CronTrigger(hour=3, minute=0),
+        id='nightly_fine_tuning',
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
     scheduler.add_job(
         func=check_vacation_schedules,
         trigger='interval',
@@ -171,6 +188,7 @@ def _setup_scheduler():
     atexit.register(lambda: scheduler.shutdown(wait=False))
 
     print("[Scheduler] Weekly insights scheduler started — runs every Sunday at 06:00.")
+    print("[Scheduler] Nightly fine-tuning checker started — runs every night at 03:00.")
     print("[Scheduler] Vacation schedule checker started — runs every 5 minutes.")
     print("[Scheduler] Device connectivity checker started — runs every 10 minutes.")
     print("[Scheduler] Sensor health checker started — runs every 60 minutes.")

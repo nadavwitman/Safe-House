@@ -3,7 +3,7 @@ Standalone scheduler process — runs on Machine 2 (t3.micro).
 
 Handles:
   - Weekly wellness insights  (every Sunday at 06:00 UTC)
-  - Model fine-tuning         (1st and 15th of every month at 03:00 UTC)
+  - Model fine-tuning         (nightly at 03:00 UTC)
 
 Machine 1 (API) sets ENABLE_SCHEDULER=false so only this process owns scheduling.
 """
@@ -16,8 +16,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from dotenv import load_dotenv
 load_dotenv()
 
-# Validate required env vars before going any further
-_required = ['JWT_SECRET_KEY', 'FIREBASE_CREDENTIALS_PATH', 'GEMINI_API_KEY']
+# Validate required env vars before going any further. FIREBASE_CREDENTIALS_PATH is
+# intentionally not required here: database/repositories/client.py falls back to a
+# local firebase-credentials.json file when it's unset, same as every other entrypoint.
+_required = ['JWT_SECRET_KEY', 'GEMINI_API_KEY']
 _missing = [v for v in _required if not os.environ.get(v)]
 if _missing:
     print(f"[ERROR] Missing required environment variables: {', '.join(_missing)}")
@@ -29,15 +31,13 @@ from apscheduler.triggers.cron import CronTrigger
 import database.database as database
 import database.user_db as user_db
 from app.weekly_summary.report_generator import run_insights_pipeline
-from app.weekly_summary.model_manager import run_weekly_mlops_pipeline_scalable
+from app.ai.model_manager import run_weekly_mlops_pipeline_scalable
 from firebase_admin import firestore as _firestore
 
 
 def run_weekly_insights():
     print("[Scheduler] Starting weekly insights pipeline...")
     try:
-        run_weekly_mlops_pipeline_scalable()
-
         house_ids = user_db.get_all_active_house_ids()
         if not house_ids:
             print("[Scheduler] No active houses — skipping.")
@@ -87,12 +87,12 @@ if __name__ == '__main__':
     )
     scheduler.add_job(
         run_fine_tuning,
-        trigger=CronTrigger(day='1,15', hour=3, minute=0),
+        trigger=CronTrigger(hour=3, minute=0),
         id='fine_tuning',
         misfire_grace_time=3600,
     )
 
     atexit.register(lambda: scheduler.shutdown(wait=False))
 
-    print("[Scheduler] Started. Jobs: weekly insights (Sun 06:00), fine-tuning (1st+15th 03:00).")
+    print("[Scheduler] Started. Jobs: weekly insights (Sun 06:00), fine-tuning (nightly 03:00).")
     scheduler.start()

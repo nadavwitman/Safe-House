@@ -24,7 +24,8 @@ COPY AI_Model/                   AI_Model/
 EXPOSE 5000
 
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    AI_MODEL_DIR=/app/AI_Model
 
 # Single worker — APScheduler runs inside the process, so multiple workers
 # would create duplicate scheduled jobs.

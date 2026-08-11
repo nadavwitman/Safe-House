@@ -9,7 +9,7 @@ import app.monitoring.device_health as device_health
 from app.alerts import alert_messages
 
 # Import the global cache dictionary and download helper from your manager
-from app.weekly_summary.model_manager import HOUSES_MODELS_CACHE, download_model_from_firebase
+from app.ai.model_manager import HOUSES_MODELS_CACHE, download_model_from_firebase
 
 analyze_bp = Blueprint('analyze', __name__)
 

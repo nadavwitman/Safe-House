@@ -7,8 +7,8 @@ import numpy as np
 import torch
 
 # Define the path to save/load the scaler object
-# This path goes up from 'ai', up from 'app', into 'AI_Model'
-SCALER_PATH = os.path.join(os.path.dirname(__file__), "../../../AI_Model/model/scaler.pkl")
+from app.ai.model_paths import AI_MODEL_DIR
+SCALER_PATH = os.path.join(AI_MODEL_DIR, "model", "scaler.pkl")
 
 # Module-level cache — the scaler is immutable, so load it from disk once instead of on
 # every inference call (which happens once a minute per house).

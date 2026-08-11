@@ -19,16 +19,14 @@ from app.monitoring.device_health import check_device_connectivity, check_sensor
 app = create_app()
 
 def scheduled_fine_tuning_job():
-    """Fine-tune every 2 weeks at 3 AM and PERSIST the updated models to Firebase Storage.
-
-    Delegates to the MLOps pipeline (download current model → fine-tune → upload → bump the
-    fine-tune counter → invalidate the RAM cache) instead of training and discarding the result.
-    """
+    """Checks nightly and fine-tunes any house that's 14+ days overdue, persisting the
+    updated model to Firebase Storage (download current model → fine-tune → upload →
+    bump the fine-tune counter → refresh the RAM cache entry for that house)."""
     print("[03:00 AM] Starting automatic Weight Interpolation fine-tuning...")
     try:
-        from app.weekly_summary.model_manager import run_weekly_mlops_pipeline_scalable
+        from app.ai.model_manager import run_weekly_mlops_pipeline_scalable
         run_weekly_mlops_pipeline_scalable()
-        print("Nightly fine-tuning completed successfully for all houses.")
+        print("Nightly fine-tuning check completed.")
     except Exception as e:
         print(f"Error during scheduled fine-tuning: {e}")
 
@@ -70,7 +68,8 @@ def check_vacation_schedules():
 scheduler = BackgroundScheduler()
 scheduler.add_job(
     func=scheduled_fine_tuning_job,
-    trigger=CronTrigger(day='1,15', hour=3, minute=0),
+    trigger=CronTrigger(hour=3, minute=0),
+    id='nightly_fine_tuning',
 )
 scheduler.add_job(
     func=check_vacation_schedules,
