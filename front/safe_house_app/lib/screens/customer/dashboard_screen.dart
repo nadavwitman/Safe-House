@@ -127,14 +127,15 @@ class _DashboardScreenState extends State<DashboardScreen>
         if (changed) _lastActivity.addAll(found);
       });
 
-      // Home status reflects the latest AI decision. It only changes ~every 30 min
-      // (alert cooldown), so refresh it at most every ~25s rather than on every poll.
+      // Home status reflects the latest AI decision (now logged every analysis
+      // cycle, including Normal), so check it once a minute rather than on every
+      // 5-second poll.
       final now = DateTime.now();
       if (_lastStatusFetch == null ||
-          now.difference(_lastStatusFetch!) > const Duration(seconds: 25)) {
+          now.difference(_lastStatusFetch!) > const Duration(minutes: 1)) {
         _lastStatusFetch = now;
         try {
-          final alerts = await InsightsService.getAlerts(houseId);
+          final alerts = await InsightsService.getAlerts(houseId, limit: 1);
           final s = _deriveStatus(alerts);
           if (mounted && s != _alertStatus) setState(() => _alertStatus = s);
         } catch (_) {
@@ -148,18 +149,12 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 
-  /// Maps the most recent AI decision into a home-screen status. A warning re-fires
-  /// at most every 30 min while the anomaly persists, so anything older than ~40 min
-  /// is treated as resolved (back to All Clear).
+  /// Maps the most recent AI decision directly into a home-screen status. Every
+  /// analysis cycle now logs a decision (including Normal), so the latest entry
+  /// is a live, current signal rather than something that needs to time out.
   HouseStatus _deriveStatus(List<Map<String, dynamic>> alerts) {
     if (alerts.isEmpty) return HouseStatus.clear;
     final latest = alerts.first; // endpoint returns newest first
-    final timeStr = latest['time'] as String?;
-    final t = timeStr != null ? DateTime.tryParse(timeStr) : null;
-    if (t == null) return HouseStatus.clear;
-    if (DateTime.now().difference(t.toLocal()) > const Duration(minutes: 40)) {
-      return HouseStatus.clear;
-    }
     final decision = (latest['decision'] as String? ?? '').toLowerCase();
     if (decision.contains('emergency')) return HouseStatus.emergency;
     if (decision.contains('warning')) return HouseStatus.warning;

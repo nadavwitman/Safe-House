@@ -51,20 +51,30 @@ def log_ai_decision(house_id, sensor_id, decision, note=None, title=None):
     doc_ref.set(payload)
 
 
-def get_alert_history(house_id, limit=50):
-    """Returns the most recent alerts (AI + device-offline) for a house, newest first."""
+def get_alert_history(house_id, limit=50, exclude_normal=False):
+    """Returns the most recent alerts (AI + device-offline) for a house, newest first.
+
+    `exclude_normal` drops routine 'Normal' AI decisions (kept only as the live
+    status signal for the dashboard, not shown on the alerts screen). Since Normal
+    decisions are now logged every analysis cycle, we over-fetch and filter/trim
+    in Python rather than adding a second Firestore inequality filter on `decision`
+    alongside the existing range filter on `time`.
+    """
     cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+    fetch_limit = limit * 10 if exclude_normal else limit
     docs = (
         db.collection('houses').document(house_id)
         .collection('ai_decisions')
         .where('time', '>=', cutoff)
         .order_by('time', direction=firestore.Query.DESCENDING)
-        .limit(limit)
+        .limit(fetch_limit)
         .get()
     )
     results = []
     for doc in docs:
         d = doc.to_dict()
+        if exclude_normal and d.get('type', 'ai') == 'ai' and d.get('decision') == 'Normal':
+            continue
         t = d.get('time')
         results.append({
             'sensor_id': d.get('sensor_id'),
@@ -76,4 +86,6 @@ def get_alert_history(house_id, limit=50):
             'note': d.get('note'),
             'time': t.isoformat() if hasattr(t, 'isoformat') else str(t),
         })
+        if len(results) >= limit:
+            break
     return results

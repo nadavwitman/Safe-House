@@ -80,5 +80,6 @@ def get_weekly_report(house_id):
 def get_alerts(house_id):
     """Returns the recent alert history (AI anomalies + device-offline) for a house."""
     limit = min(int(request.args.get('limit', 50)), 100)
-    alerts = database.get_alert_history(house_id, limit=limit)
+    exclude_normal = request.args.get('exclude_normal', 'false').lower() == 'true'
+    alerts = database.get_alert_history(house_id, limit=limit, exclude_normal=exclude_normal)
     return jsonify({'alerts': alerts}), 200
