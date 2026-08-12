@@ -3,7 +3,14 @@ import torch
 import torch.optim as optim
 
 from app.ai.data_preprocessing import run_preprocessing_pipeline
-from app.ai.model_paths import LSTMAnomalyDetector, WINDOW_SIZE, N_FEATURES, MODEL_PATH
+from app.ai.model_paths import LSTMAnomalyDetector, WINDOW_SIZE, N_FEATURES, MODEL_PATH, SENSOR_SLICE
+
+# Matches AI_Model/training/Safe_House_LSTM_Training_weighted_colab.ipynb: sensor events
+# are extremely sparse (0.14%-1.06% positive per channel), so plain MSE collapses the
+# sensor_* columns to near-zero. The base checkpoint was trained with this same asymmetric
+# weight on positive sensor targets -- fine-tuning must keep using it, or 30% of every
+# nightly blend nudges those columns back toward the collapsed, pre-weighted-loss behavior.
+POSITIVE_WEIGHT = 100.0
 
 
 def fine_tune_house_model(house_id: str, raw_training_data: list, house_sensor_mask: list,
@@ -38,7 +45,6 @@ def fine_tune_house_model(house_id: str, raw_training_data: list, house_sensor_m
 
     full_mask = house_sensor_mask + house_sensor_mask + [1, 1, 1, 1]
     mask_tensor = torch.FloatTensor(full_mask).view(1, 1, -1)
-    active_per_window = mask_tensor.sum() * WINDOW_SIZE  # active elements per window
 
     # Use the RAM model if provided by the manager, otherwise load the generic baseline
     if current_model is not None:
@@ -74,9 +80,18 @@ def fine_tune_house_model(house_id: str, raw_training_data: list, house_sensor_m
             optimizer.zero_grad()
             reconstructed = model(batch)
 
+            # Asymmetric weight on positive sensor-event targets, same as base training —
+            # combined (not replaced) with the per-zone installed-sensor mask below.
+            positive_weight = torch.ones_like(batch)
+            sensor_target = batch[..., SENSOR_SLICE]
+            positive_weight[..., SENSOR_SLICE] = torch.where(
+                sensor_target == 1, POSITIVE_WEIGHT, 1.0
+            )
+
             raw_loss = torch.nn.functional.mse_loss(reconstructed, batch, reduction='none')
-            masked_loss = raw_loss * mask_tensor
-            loss = masked_loss.sum() / (active_per_window * batch.shape[0] + 1e-8)
+            weight = mask_tensor * positive_weight  # [B, 360, 18], varies per-sample unlike the old constant mask
+            masked_loss = raw_loss * weight
+            loss = masked_loss.sum() / (weight.sum() + 1e-8)
 
             loss.backward()
             # Gradient clipping keeps LSTM training stable (prevents exploding gradients)

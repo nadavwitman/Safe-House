@@ -14,7 +14,7 @@ AI_MODEL_DIR = os.environ.get(
 sys.path.insert(0, AI_MODEL_DIR)
 from model_handler import (
     LSTMAnomalyDetector, evaluate_window, DEFAULT_SENSOR_CONFIG,
-    WINDOW_SIZE, N_FEATURES,
+    WINDOW_SIZE, N_FEATURES, SENSOR_SLICE,
 )
 
 MODEL_PATH = os.path.join(AI_MODEL_DIR, "model", "best_safe_house_model.pth")
