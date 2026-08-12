@@ -91,12 +91,6 @@ def inject_repeated_visits(df, zone, start, end, interval):
         df.loc[t, f'sensor_{zone}'] = 1
 
 
-def last_sensor_event(df, zone):
-    """Minute of the last sensor_<zone> pulse in the day (None if there are none)."""
-    idx = np.flatnonzero(df[f'sensor_{zone}'].values == 1)
-    return int(idx[-1]) if len(idx) else None
-
-
 def roll_and_log(model, scaler, df, out_path, header_lines, log_interval=5, focus=None,
                   focus_fields=(), anomaly_start=None, anomaly_end=None, margin=60):
     """

@@ -8,6 +8,5 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 os.environ.setdefault('ENABLE_SCHEDULER', 'true')
 
 from app import create_app
-import database.database as database
 
 application = create_app()

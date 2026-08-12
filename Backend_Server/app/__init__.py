@@ -37,9 +37,10 @@ def create_app():
     app.register_blueprint(user_bp)
     app.register_blueprint(admin_bp)
 
-    # ENABLE_SCHEDULER=false on the API machine (Machine 1) — the dedicated
-    # scheduler machine (Machine 2) runs its own APScheduler process via
-    # scheduler_main.py, which avoids double-scheduling when scaling the API.
+    # ENABLE_SCHEDULER gates the in-process APScheduler so only one process ever
+    # owns the scheduled jobs. entrypoints/wsgi.py (production) opts in;
+    # entrypoints/run.py (local dev) manages its own scheduler and opts out here
+    # to avoid running two schedulers side by side.
     if os.environ.get("ENABLE_SCHEDULER", "true").lower() == "true":
         # With use_reloader=False (or production), WERKZEUG_RUN_MAIN is never
         # set — start the scheduler directly. With reloader enabled, start only

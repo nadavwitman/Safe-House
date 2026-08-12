@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
 import torch  # kept so unpickling serialized torch models resolves cleanly
 from firebase_admin import storage, firestore
-from database.database import db, fetch_finetuning_data
+from database.database import db, fetch_finetuning_data, FINETUNING_READING_TARGET
 from app.state.house_mask_store import house_mask_store
 from app.ai.fine_tuning import fine_tune_house_model
 
@@ -50,9 +50,6 @@ def download_model_from_firebase(house_id):
         return None
 
 
-MIN_TRAINING_SPAN_DAYS = 14  # require the full 14-day window of real, non-vacation data
-
-
 def auto_train_house_model(house_id):
     """
     Background worker that fetches data, delegates fine-tuning to the AI handler,
@@ -63,19 +60,15 @@ def auto_train_house_model(house_id):
     """
     print(f"[MLOps Worker] Initiating automated retraining sequence for house: {house_id}")
     try:
-        # 1. Fetch the last 14 days of sensor vectors from the correct Firestore subcollection
+        # 1. Fetch the last ~14 real (non-vacation) days of sensor vectors
         raw_training_data = fetch_finetuning_data(house_id)
 
-        # Guard against training on a thin, mostly-vacation slice: is_vacation rows are
-        # already filtered out by fetch_finetuning_data, but that alone doesn't guarantee
-        # the remaining rows actually span the full 14-day window.
-        if raw_training_data:
-            span_days = (raw_training_data[-1]['time'] - raw_training_data[0]['time']).total_seconds() / 86400
-        else:
-            span_days = 0
-        if span_days < MIN_TRAINING_SPAN_DAYS:
-            print(f"[MLOps Worker] Skipping {house_id}: only {span_days:.1f} days of non-vacation "
-                  f"data (< {MIN_TRAINING_SPAN_DAYS} required).")
+        # Guard against training on a thin, mostly-vacation slice: fetch_finetuning_data
+        # asks Firestore for FINETUNING_READING_TARGET non-vacation readings directly, so
+        # coming up short here means the house genuinely doesn't have 14 real days yet.
+        if len(raw_training_data) < FINETUNING_READING_TARGET:
+            print(f"[MLOps Worker] Skipping {house_id}: only {len(raw_training_data)} non-vacation "
+                  f"readings (< {FINETUNING_READING_TARGET} required).")
             return False
 
         # 2. Fetch house mask
@@ -166,6 +159,7 @@ def run_weekly_mlops_pipeline_scalable():
 
         model_metadata = house_data.get('model_metadata', {})
         last_retrained = model_metadata.get('last_retrained')
+        vacation_days = house_data.get('vacation_days_total', 0)
 
         # 14-Day Frequency Guard. vacation_days_total (accrued since the last successful
         # fine-tune, reset to 0 there — see auto_train_house_model / vacation.py) is
@@ -178,7 +172,6 @@ def run_weekly_mlops_pipeline_scalable():
                 last_retrained = last_retrained.replace(tzinfo=timezone.utc)
 
             calendar_days_since_train = (current_time - last_retrained).days
-            vacation_days = house_data.get('vacation_days_total', 0)
             effective_days_since_train = calendar_days_since_train - vacation_days
 
             if effective_days_since_train < 14:
@@ -186,8 +179,35 @@ def run_weekly_mlops_pipeline_scalable():
                       f"since last train, {vacation_days:.1f} of them vacation "
                       f"({effective_days_since_train:.1f} real days). Skipping (needs 14).")
                 continue # Skip this house and move to the next one
+        else:
+            # Never trained. A brand-new house can't have 14 days of sensor data yet, so
+            # querying sensor_vectors every night until it does is a wasted DB read. Track
+            # eligibility purely off metadata (training_start_date) until 14 effective days
+            # have passed, and only then let the house through to the real data fetch.
+            training_start_date = model_metadata.get('training_start_date')
 
-        # If it hasn't been trained yet, or 14+ effective days have passed, queue it
+            if not training_start_date:
+                db.collection('houses').document(house.id).update({
+                    'model_metadata.training_start_date': current_time,
+                })
+                print(f"[MLOps Engine] House {house.id}: first time seen, stamped "
+                      f"training_start_date. Skipping until 14 real days accrue.")
+                continue
+
+            if training_start_date.tzinfo is None:
+                training_start_date = training_start_date.replace(tzinfo=timezone.utc)
+
+            calendar_days_since_start = (current_time - training_start_date).days
+            effective_days_since_start = calendar_days_since_start - vacation_days
+
+            if effective_days_since_start < 14:
+                print(f"[MLOps Engine] House {house.id}: {calendar_days_since_start} calendar days "
+                      f"since training_start_date, {vacation_days:.1f} of them vacation "
+                      f"({effective_days_since_start:.1f} real days). Skipping (needs 14).")
+                continue
+
+        # Either last_retrained or training_start_date shows 14+ effective days have
+        # passed — queue it for its first/next fine-tune.
         house_ids_to_train.append(house.id)
 
     if not house_ids_to_train:

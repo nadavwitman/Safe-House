@@ -13,6 +13,7 @@ from database.repositories.sensor_readings import (
     get_recent_sensor_events,
     get_weekly_sensor_data,
     fetch_finetuning_data,
+    FINETUNING_READING_TARGET,
 )
 
 from database.repositories.device_health import (

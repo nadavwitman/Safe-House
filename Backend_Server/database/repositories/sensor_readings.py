@@ -142,17 +142,24 @@ def get_weekly_sensor_data(house_id='default_house'):
     return results
 
 
+# One ESP32 reading/minute (see app/state/data_buffer.py) * 14 days.
+FINETUNING_READING_TARGET = 14 * 24 * 60  # 20,160
+
+
 def fetch_finetuning_data(house_id='default_house'):
-    """Retrieves non-vacation data recorded during the last 14 days for model fine-tuning.
-    Vacation-period readings are excluded so the model learns only the resident's real routine."""
-    vectors_ref = db.collection('houses').document(house_id).collection('sensor_vectors')
-    cutoff_date = datetime.now(timezone.utc) - timedelta(days=14)
+    """Retrieves the most recent ~14 real (non-vacation) days of readings for model
+    fine-tuning, by asking Firestore directly for the last FINETUNING_READING_TARGET
+    non-vacation readings instead of a calendar-date cutoff. This sidesteps having to
+    separately account for vacation time: vacation-flagged readings are excluded
+    server-side, so the count returned is already real, non-vacation data no matter how
+    much vacation time falls within that stretch."""
+    vectors_ref = (
+        db.collection('houses').document(house_id).collection('sensor_vectors')
+        .where('is_vacation', '==', False)
+        .order_by('time', direction=firestore.Query.DESCENDING)
+        .limit(FINETUNING_READING_TARGET)
+    )
 
-    new_docs = vectors_ref.where('time', '>=', cutoff_date).get()
-    new_data = [
-        doc.to_dict() for doc in new_docs
-        if not doc.to_dict().get('is_vacation', False)
-    ]
-
+    new_data = [doc.to_dict() for doc in vectors_ref.get()]
     new_data.sort(key=lambda x: x['time'])
     return new_data
