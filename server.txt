@@ -17,8 +17,6 @@ Backend_Server/requirements.txt
 
 
 == Backend_Server/entrypoints ==
-Backend_Server/entrypoints/run.py
-Backend_Server/entrypoints/scheduler_main.py
 Backend_Server/entrypoints/wsgi.py
 
 
@@ -98,6 +96,43 @@ AI_Model/tests/                              (excluded manually above — curren
                                                the image unnecessarily. Recommend adding AI_Model/tests/ and
                                                AI_Model/training/ to .dockerignore before the next build.)
 AI_Model/training/                           (same as above — notebooks, not needed at runtime)
+
+
+================================================================================
+SERVER ACCESS & UPDATE
+================================================================================
+
+Host: 16.164.45.100 (ubuntu user)
+Live port: 5000
+
+SSH:
+  # Ask the machine's owner for the SafeHouseKey.pem path (it's user-specific — do not assume one).
+  cp <path-to-SafeHouseKey.pem> ~/.ssh/SafeHouseKey.pem && chmod 400 ~/.ssh/SafeHouseKey.pem
+  ssh -i ~/.ssh/SafeHouseKey.pem ubuntu@16.164.45.100
+
+Check status:
+  sudo docker ps
+  sudo docker logs -f safe-house-backend
+
+Start/stop (never deletes container):
+  sudo docker start safe-house-backend
+  sudo docker stop safe-house-backend
+  # if stop hangs (AppArmor bug): sudo kill -9 $(sudo docker inspect safe-house-backend --format '{{.State.Pid}}')
+
+Update code (build from repo root, test on 5001, then swap into 5000):
+  cd <repo root on server>
+  sudo docker build -f Backend_Server/Dockerfile -t safe-house-image:candidate .
+  sudo docker run -d --name sh-test -p 5001:5000 --env-file Backend_Server/.env \
+    -v <path-to-firebase-credentials.json>:/app/database/firebase-credentials.json safe-house-image:candidate
+  sudo docker logs -f sh-test   # confirm clean boot, then: sudo docker rm -f sh-test
+  sudo docker tag safe-house-image:latest safe-house-image:rollback-$(date +%Y%m%d-%H%M%S)
+  sudo docker stop safe-house-backend && sudo docker rm safe-house-backend
+  sudo docker tag safe-house-image:candidate safe-house-image:latest
+  sudo docker run -d --name safe-house-backend --restart unless-stopped -p 5000:5000 \
+    --env-file Backend_Server/.env \
+    -v <path-to-firebase-credentials.json>:/app/database/firebase-credentials.json safe-house-image:latest
+
+Current production image: safe-house-image:latest
 
 
 == Verification performed ==
