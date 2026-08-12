@@ -4,7 +4,7 @@ Verified: every local import (app.*, database.*, entrypoints.*) resolves to a re
 Build context for `docker build` = repo root (Safe-House/), NOT Backend_Server/.
   -> Dockerfile path: Backend_Server/Dockerfile  (use -f Backend_Server/Dockerfile from repo root)
 
-Total: 58 files
+Total: 56 files
 
 
 == .dockerignore (repo root — controls what the build excludes) ==
