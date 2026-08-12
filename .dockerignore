@@ -23,3 +23,7 @@ front/
 front_demo/
 IoT_Hardware/
 Docs/
+
+# AI_Model dev-only content not needed at runtime
+AI_Model/tests/
+AI_Model/training/
