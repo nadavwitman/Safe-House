@@ -1,0 +1,115 @@
+HIGH FREQUENCY (new model) -- repeated Bedroom visits scenario
+Anomaly: a Bedroom sensor pulse every 5min from 07:00-23:00 (far more distinct visit-starts than baseline). Rest of the day is a normal generated routine.
+Rolling 360-minute window, 1-minute step: 1h of normal routine before the anomaly, the anomaly itself, and 1h after (to see recovery).
+
+  now  win_start  severity    type              zone           score  focus_score
+06:00          0  Normal      -                 -             0.0000  0.0000
+06:10         10  Normal      -                 -             0.0000  0.0000
+06:20         20  Normal      -                 -             0.0000  0.0000
+06:30         30  Normal      -                 -             0.0000  0.0000
+06:40         40  Normal      -                 -             0.0000  0.0000
+06:50         50  Normal      -                 -             0.0000  0.0000
+07:00         60  Normal      -                 -             0.0000  0.2000
+07:10         70  Normal      -                 -             0.0000  0.3333
+07:20         80  Normal      -                 -             0.0000  0.5556
+07:30         90  Normal      -                 -             0.0000  0.6364
+07:31         91  Warning     High Frequency    Bedroom       0.6667  0.6667
+07:40        100  Warning     High Frequency    Bedroom       0.6923  0.6923
+07:50        110  Warning     High Frequency    Bedroom       0.7333  0.7333
+08:00        120  Warning     High Frequency    Bedroom       0.7647  0.7647
+08:10        130  Warning     High Frequency    Bedroom       0.7895  0.7895
+08:20        140  Warning     High Frequency    Bedroom       0.8095  0.8095
+08:30        150  Warning     High Frequency    Bedroom       0.8261  0.8261
+08:40        160  Warning     High Frequency    Bedroom       0.8400  0.8400
+08:50        170  Warning     High Frequency    Bedroom       0.8519  0.8519
+09:00        180  Warning     High Frequency    Bedroom       0.8621  0.8621
+09:10        190  Warning     High Frequency    Bedroom       0.8710  0.8710
+09:20        200  Warning     High Frequency    Bedroom       0.8788  0.8788
+09:30        210  Warning     High Frequency    Bedroom       0.8857  0.8857
+09:40        220  Warning     High Frequency    Bedroom       0.8919  0.8919
+09:50        230  Warning     High Frequency    Bedroom       0.8974  0.8974
+10:00        240  Warning     High Frequency    Bedroom       0.9024  0.9024
+10:10        250  Warning     High Frequency    Bedroom       0.9070  0.9070
+10:20        260  Warning     High Frequency    Bedroom       0.9111  0.9111
+10:30        270  Warning     High Frequency    Bedroom       0.9149  0.9149
+10:40        280  Warning     High Frequency    Bedroom       0.9184  0.9184
+10:50        290  Warning     High Frequency    Bedroom       0.9216  0.9216
+11:00        300  Warning     High Frequency    Bedroom       0.9231  0.9231
+11:10        310  Warning     High Frequency    Bedroom       0.9231  0.9231
+11:20        320  Warning     High Frequency    Bedroom       0.9231  0.9231
+11:30        330  Warning     High Frequency    Bedroom       0.9231  0.9231
+11:40        340  Warning     High Frequency    Bedroom       0.9231  0.9231
+11:50        350  Warning     High Frequency    Bedroom       0.9231  0.9231
+12:00        360  Warning     High Frequency    Bedroom       0.9231  0.9231
+12:10        370  Warning     High Frequency    Bedroom       0.9231  0.9231
+12:20        380  Warning     High Frequency    Bedroom       0.9231  0.9231
+12:30        390  Warning     High Frequency    Bedroom       0.9231  0.9231
+12:40        400  Warning     High Frequency    Bedroom       0.9231  0.9231
+12:50        410  Warning     High Frequency    Bedroom       0.9231  0.9231
+13:00        420  Warning     High Frequency    Bedroom       0.9231  0.9231
+13:10        430  Warning     High Frequency    Bedroom       0.9231  0.9231
+13:20        440  Warning     High Frequency    Bedroom       0.9231  0.9231
+13:30        450  Warning     High Frequency    Bedroom       0.9231  0.9231
+13:40        460  Warning     High Frequency    Bedroom       0.9231  0.9231
+13:50        470  Warning     High Frequency    Bedroom       0.9231  0.9231
+14:00        480  Warning     High Frequency    Bedroom       0.9231  0.9231
+14:10        490  Warning     High Frequency    Bedroom       0.9231  0.9231
+14:20        500  Warning     High Frequency    Bedroom       0.9231  0.9231
+14:30        510  Warning     High Frequency    Bedroom       0.9231  0.9231
+14:40        520  Warning     High Frequency    Bedroom       0.9231  0.9231
+14:50        530  Warning     High Frequency    Bedroom       0.9231  0.9231
+15:00        540  Warning     High Frequency    Bedroom       0.9231  0.9231
+15:10        550  Warning     High Frequency    Bedroom       0.9231  0.9231
+15:20        560  Warning     High Frequency    Bedroom       0.9231  0.9231
+15:30        570  Warning     High Frequency    Bedroom       0.9231  0.9231
+15:40        580  Warning     High Frequency    Bedroom       0.9231  0.9231
+15:50        590  Warning     High Frequency    Bedroom       0.9231  0.9231
+16:00        600  Warning     High Frequency    Bedroom       0.9231  0.9231
+16:10        610  Warning     High Frequency    Bedroom       0.9231  0.9231
+16:20        620  Warning     High Frequency    Bedroom       0.9231  0.9231
+16:30        630  Warning     High Frequency    Bedroom       0.9231  0.9231
+16:40        640  Warning     High Frequency    Bedroom       0.9231  0.9231
+16:50        650  Warning     High Frequency    Bedroom       0.9231  0.9231
+17:00        660  Warning     High Frequency    Bedroom       0.9231  0.9231
+17:10        670  Warning     High Frequency    Bedroom       0.9231  0.9231
+17:20        680  Warning     High Frequency    Bedroom       0.9231  0.9231
+17:30        690  Warning     High Frequency    Bedroom       0.9231  0.9231
+17:40        700  Warning     High Frequency    Bedroom       0.9231  0.9231
+17:50        710  Warning     High Frequency    Bedroom       0.9231  0.9231
+18:00        720  Warning     High Frequency    Bedroom       0.9231  0.9231
+18:10        730  Warning     High Frequency    Bedroom       0.9231  0.9231
+18:20        740  Warning     High Frequency    Bedroom       0.9231  0.9231
+18:30        750  Warning     High Frequency    Bedroom       0.9231  0.9231
+18:40        760  Warning     High Frequency    Bedroom       0.9231  0.9231
+18:50        770  Warning     High Frequency    Bedroom       0.9231  0.9231
+19:00        780  Warning     High Frequency    Bedroom       0.9231  0.9231
+19:10        790  Warning     High Frequency    Bedroom       0.9231  0.9231
+19:20        800  Warning     High Frequency    Bedroom       0.9231  0.9231
+19:30        810  Warning     High Frequency    Bedroom       0.9231  0.9231
+19:40        820  Warning     High Frequency    Bedroom       0.9231  0.9231
+19:50        830  Warning     High Frequency    Bedroom       0.9231  0.9231
+20:00        840  Warning     High Frequency    Bedroom       0.9231  0.9231
+20:10        850  Warning     High Frequency    Bedroom       0.9231  0.9231
+20:20        860  Warning     High Frequency    Bedroom       0.9231  0.9231
+20:30        870  Warning     High Frequency    Bedroom       0.9231  0.9231
+20:40        880  Warning     High Frequency    Bedroom       0.9231  0.9231
+20:50        890  Warning     High Frequency    Bedroom       0.9231  0.9231
+21:00        900  Warning     High Frequency    Bedroom       0.9231  0.9231
+21:10        910  Warning     High Frequency    Bedroom       0.9231  0.9231
+21:20        920  Warning     High Frequency    Bedroom       0.9231  0.9231
+21:30        930  Warning     High Frequency    Bedroom       0.9231  0.9231
+21:40        940  Warning     High Frequency    Bedroom       0.9231  0.9231
+21:50        950  Warning     High Frequency    Bedroom       0.9216  0.9216
+22:00        960  Warning     High Frequency    Bedroom       0.9216  0.9216
+22:10        970  Warning     High Frequency    Bedroom       0.9216  0.9216
+22:20        980  Warning     High Frequency    Bedroom       0.9216  0.9216
+22:30        990  Warning     High Frequency    Bedroom       0.9216  0.9216
+22:40       1000  Warning     High Frequency    Bedroom       0.9216  0.9216
+22:50       1010  Warning     High Frequency    Bedroom       0.9216  0.9216
+23:00       1020  Warning     High Frequency    Bedroom       0.9231  0.9231
+23:10       1030  Warning     High Frequency    Bedroom       0.9200  0.9200
+23:20       1040  Warning     High Frequency    Bedroom       0.9167  0.9167
+23:30       1050  Warning     High Frequency    Bedroom       0.9130  0.9130
+23:40       1060  Warning     High Frequency    Bedroom       0.9091  0.9091
+23:50       1070  Warning     High Frequency    Bedroom       0.9048  0.9048
+00:00       1080  Warning     High Frequency    Bedroom       0.9000  0.9000

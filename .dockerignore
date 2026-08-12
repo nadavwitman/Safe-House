@@ -1,0 +1,29 @@
+# Secrets — inject these at runtime via AWS env vars / Secrets Manager
+Backend_Server/.env
+Backend_Server/database/firebase-credentials.json
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Dev / test files
+Backend_Server/tests/
+Backend_Server/scripts/
+
+# Virtual environment
+Backend_Server/venv/
+Backend_Server/.venv/
+Backend_Server/env/
+
+# Non-backend project directories not needed in this image
+front/
+front_demo/
+IoT_Hardware/
+Docs/
+
+# AI_Model dev-only content not needed at runtime
+AI_Model/tests/
+AI_Model/training/

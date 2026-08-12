@@ -27,7 +27,8 @@ class _AlertsScreenState extends State<AlertsScreen> {
     final houseId = AuthState.instance.activeHouseId;
     if (houseId == null) { setState(() => _loading = false); return; }
     try {
-      final raw = await InsightsService.getAlerts(houseId);
+      final raw =
+          await InsightsService.getAlerts(houseId, excludeNormal: true);
       if (mounted) setState(() { _alerts = _deduplicate(raw); _loading = false; });
     } catch (_) {
       if (mounted) setState(() { _alerts = []; _loading = false; });

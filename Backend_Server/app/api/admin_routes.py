@@ -4,7 +4,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 import database.user_db as user_db
 from app.auth.decorators import admin_required
 from app.auth.utils import generate_user_id, generate_invite_code, generate_device_token, hash_password
-from app.core.house_mask_store import house_mask_store
+from app.state.house_mask_store import house_mask_store
 
 admin_bp = Blueprint('admin', __name__)
 

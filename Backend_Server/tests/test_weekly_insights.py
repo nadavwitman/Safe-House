@@ -15,8 +15,6 @@ import pandas as pd
 from app.weekly_summary.aggregator import aggregate_weekly_metrics
 from app.weekly_summary.metrics.mobility import _compute_mobility_metrics
 from app.weekly_summary.metrics.sleep import _compute_sleep_metrics
-from app.weekly_summary.metrics.nutrition import _compute_nutrition_metrics
-from app.weekly_summary.metrics.meds import _compute_meds
 
 from app.weekly_summary.report_generator import format_compact_prompt, run_insights_pipeline
 

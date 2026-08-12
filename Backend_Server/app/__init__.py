@@ -37,9 +37,10 @@ def create_app():
     app.register_blueprint(user_bp)
     app.register_blueprint(admin_bp)
 
-    # ENABLE_SCHEDULER=false on the API machine (Machine 1) — the dedicated
-    # scheduler machine (Machine 2) runs its own APScheduler process via
-    # scheduler_main.py, which avoids double-scheduling when scaling the API.
+    # ENABLE_SCHEDULER gates the in-process APScheduler so only one process ever
+    # owns the scheduled jobs. entrypoints/wsgi.py (production) opts in;
+    # entrypoints/run.py (local dev) manages its own scheduler and opts out here
+    # to avoid running two schedulers side by side.
     if os.environ.get("ENABLE_SCHEDULER", "true").lower() == "true":
         # With use_reloader=False (or production), WERKZEUG_RUN_MAIN is never
         # set — start the scheduler directly. With reloader enabled, start only
@@ -59,11 +60,17 @@ def _setup_scheduler():
     import database.database as database
     from app.weekly_summary.report_generator import run_insights_pipeline
 
+    def scheduled_nightly_fine_tuning():
+        """Checks every active house nightly and fine-tunes any that are 14+ days overdue."""
+        try:
+            from app.ai.model_manager import run_weekly_mlops_pipeline_scalable
+            run_weekly_mlops_pipeline_scalable()
+        except Exception as e:
+            print(f"[Scheduler] Fatal error in scheduled_nightly_fine_tuning: {e}")
+
     def scheduled_weekly_insights():
         """Generates weekly wellness reports for every active house."""
         try:
-            from app.weekly_summary.model_manager import run_weekly_mlops_pipeline_scalable
-            run_weekly_mlops_pipeline_scalable()
             import database.user_db as user_db
             house_ids = user_db.get_all_active_house_ids()
             if not house_ids:
@@ -104,7 +111,7 @@ def _setup_scheduler():
         """Auto-activates/deactivates vacation mode based on stored schedules."""
         from datetime import datetime
         import database.user_db as _user_db
-        from app.core.data_buffer import sensor_buffer
+        from app.state.data_buffer import sensor_buffer
 
         try:
             house_ids = _user_db.get_all_active_house_ids()
@@ -134,7 +141,7 @@ def _setup_scheduler():
         except Exception as e:
             print(f"[Scheduler] Fatal error in check_vacation_schedules: {e}")
 
-    from app.core.device_health import check_device_connectivity, check_sensor_health
+    from app.monitoring.device_health import check_device_connectivity, check_sensor_health
 
     scheduler = BackgroundScheduler(daemon=True)
     scheduler.add_job(
@@ -143,6 +150,17 @@ def _setup_scheduler():
         id='weekly_insights',
         replace_existing=True,
         misfire_grace_time=3600,  # Fire up to 1h late if server was down at 06:00
+    )
+    # Nightly, not weekly: checks every active house and fine-tunes any that are 14+
+    # days overdue (or in vacation mode / lacking a full 14-day data span get skipped
+    # inside the pipeline). Decoupled from weekly_insights so a report failure can't
+    # block retraining and vice versa.
+    scheduler.add_job(
+        func=scheduled_nightly_fine_tuning,
+        trigger=CronTrigger(hour=3, minute=0),
+        id='nightly_fine_tuning',
+        replace_existing=True,
+        misfire_grace_time=3600,
     )
     scheduler.add_job(
         func=check_vacation_schedules,
@@ -171,6 +189,7 @@ def _setup_scheduler():
     atexit.register(lambda: scheduler.shutdown(wait=False))
 
     print("[Scheduler] Weekly insights scheduler started — runs every Sunday at 06:00.")
+    print("[Scheduler] Nightly fine-tuning checker started — runs every night at 03:00.")
     print("[Scheduler] Vacation schedule checker started — runs every 5 minutes.")
     print("[Scheduler] Device connectivity checker started — runs every 10 minutes.")
     print("[Scheduler] Sensor health checker started — runs every 60 minutes.")

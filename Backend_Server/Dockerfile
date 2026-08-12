@@ -10,20 +10,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies first (cached layer — only re-runs when requirements.txt changes)
-COPY requirements.txt .
+COPY Backend_Server/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt \
     && pip install --no-cache-dir gunicorn
 
-# Copy application source (secrets are injected at runtime, not baked in)
-COPY app/       app/
-COPY database/  database/
-COPY AI_Model/  AI_Model/
-COPY wsgi.py    .
+# Copy application source (secrets are injected at runtime, not baked in).
+# Build context is the repo root (see below), since AI_Model lives there, not in Backend_Server/.
+COPY Backend_Server/app/         app/
+COPY Backend_Server/database/    database/
+COPY Backend_Server/entrypoints/ entrypoints/
+COPY AI_Model/                   AI_Model/
 
 EXPOSE 5000
 
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    AI_MODEL_DIR=/app/AI_Model
 
 # Single worker — APScheduler runs inside the process, so multiple workers
 # would create duplicate scheduled jobs.
@@ -33,4 +35,4 @@ CMD ["gunicorn", \
      "--timeout", "120", \
      "--access-logfile", "-", \
      "--error-logfile", "-", \
-     "wsgi:application"]
+     "entrypoints.wsgi:application"]

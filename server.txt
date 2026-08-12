@@ -1,0 +1,144 @@
+SAFE-HOUSE BACKEND — SERVER DEPLOY MANIFEST
+Generated from local branch: SCRUM-25-Autoencoder-Development
+Verified: every local import (app.*, database.*, entrypoints.*) resolves to a real file below.
+Build context for `docker build` = repo root (Safe-House/), NOT Backend_Server/.
+  -> Dockerfile path: Backend_Server/Dockerfile  (use -f Backend_Server/Dockerfile from repo root)
+
+Total: 56 files
+
+
+== .dockerignore (repo root — controls what the build excludes) ==
+.dockerignore
+
+
+== Backend_Server (build files) ==
+Backend_Server/Dockerfile
+Backend_Server/requirements.txt
+
+
+== Backend_Server/entrypoints ==
+Backend_Server/entrypoints/wsgi.py
+
+
+== Backend_Server/app ==
+Backend_Server/app/__init__.py
+Backend_Server/app/ai/data_preprocessing.py
+Backend_Server/app/ai/fine_tuning.py
+Backend_Server/app/ai/inference.py
+Backend_Server/app/ai/model_manager.py
+Backend_Server/app/ai/model_paths.py
+Backend_Server/app/alerts/alert_messages.py
+Backend_Server/app/alerts/notifications.py
+Backend_Server/app/api/admin_routes.py
+Backend_Server/app/api/analyze_routes.py
+Backend_Server/app/api/auth_routes.py
+Backend_Server/app/api/config_routes.py
+Backend_Server/app/api/house_routes.py
+Backend_Server/app/api/insights_routes.py
+Backend_Server/app/api/user_routes.py
+Backend_Server/app/auth/__init__.py
+Backend_Server/app/auth/decorators.py
+Backend_Server/app/auth/utils.py
+Backend_Server/app/monitoring/device_health.py
+Backend_Server/app/state/data_buffer.py
+Backend_Server/app/state/house_mask_store.py
+Backend_Server/app/weekly_summary/__init__.py
+Backend_Server/app/weekly_summary/aggregator.py
+Backend_Server/app/weekly_summary/baseline.py
+Backend_Server/app/weekly_summary/constants.py
+Backend_Server/app/weekly_summary/metrics/__init__.py
+Backend_Server/app/weekly_summary/metrics/cognitive.py
+Backend_Server/app/weekly_summary/metrics/meds.py
+Backend_Server/app/weekly_summary/metrics/mobility.py
+Backend_Server/app/weekly_summary/metrics/nutrition.py
+Backend_Server/app/weekly_summary/metrics/sleep.py
+Backend_Server/app/weekly_summary/metrics/socialization.py
+Backend_Server/app/weekly_summary/report_generator.py
+
+
+== Backend_Server/database ==
+Backend_Server/database/database.py
+Backend_Server/database/repositories/alerts.py
+Backend_Server/database/repositories/client.py
+Backend_Server/database/repositories/device_health.py
+Backend_Server/database/repositories/houses.py
+Backend_Server/database/repositories/model_state.py
+Backend_Server/database/repositories/sensor_readings.py
+Backend_Server/database/repositories/users.py
+Backend_Server/database/repositories/vacation.py
+Backend_Server/database/user_db.py
+
+
+== AI_Model (runtime-needed only — model_handler package + weights) ==
+AI_Model/model/best_safe_house_model.pth
+AI_Model/model/scaler.pkl
+AI_Model/model_handler/__init__.py
+AI_Model/model_handler/architecture.py
+AI_Model/model_handler/constants.py
+AI_Model/model_handler/evaluator.py
+AI_Model/model_handler/scoring.py
+AI_Model/model_handler/sensor_config.py
+AI_Model/model_handler/signal_utils.py
+
+
+== NOT shipped from local machine — must already exist / be created directly on the server ==
+Backend_Server/.env                          (secrets — never leaves server / never in git)
+Backend_Server/database/firebase-credentials.json   (secret — never leaves server / never in git)
+
+
+== Deliberately excluded (dev/test-only, not needed by the running container) ==
+Backend_Server/tests/                        (pytest suite)
+Backend_Server/scripts/                      (backfill_last_activity.py — one-off maintenance script, run manually if ever needed)
+Backend_Server/pytest.ini
+Backend_Server/requirements-test.txt
+AI_Model/tests/                              (excluded manually above — current Dockerfile's `COPY AI_Model/` does NOT
+                                               exclude this via .dockerignore yet, so today it still gets copied into
+                                               the image unnecessarily. Recommend adding AI_Model/tests/ and
+                                               AI_Model/training/ to .dockerignore before the next build.)
+AI_Model/training/                           (same as above — notebooks, not needed at runtime)
+
+
+================================================================================
+SERVER ACCESS & UPDATE
+================================================================================
+
+Host: 16.164.45.100 (ubuntu user)
+Live port: 5000
+
+SSH:
+  # Ask the machine's owner for the SafeHouseKey.pem path (it's user-specific — do not assume one).
+  cp <path-to-SafeHouseKey.pem> ~/.ssh/SafeHouseKey.pem && chmod 400 ~/.ssh/SafeHouseKey.pem
+  ssh -i ~/.ssh/SafeHouseKey.pem ubuntu@16.164.45.100
+
+Check status:
+  sudo docker ps
+  sudo docker logs -f safe-house-backend
+
+Start/stop (never deletes container):
+  sudo docker start safe-house-backend
+  sudo docker stop safe-house-backend
+  # if stop hangs (AppArmor bug): sudo kill -9 $(sudo docker inspect safe-house-backend --format '{{.State.Pid}}')
+
+Update code (build from repo root, test on 5001, then swap into 5000):
+  cd <repo root on server>
+  sudo docker build -f Backend_Server/Dockerfile -t safe-house-image:candidate .
+  sudo docker run -d --name sh-test -p 5001:5000 --env-file Backend_Server/.env \
+    -v <path-to-firebase-credentials.json>:/app/database/firebase-credentials.json safe-house-image:candidate
+  sudo docker logs -f sh-test   # confirm clean boot, then: sudo docker rm -f sh-test
+  sudo docker tag safe-house-image:latest safe-house-image:rollback-$(date +%Y%m%d-%H%M%S)
+  sudo docker stop safe-house-backend && sudo docker rm safe-house-backend
+  sudo docker tag safe-house-image:candidate safe-house-image:latest
+  sudo docker run -d --name safe-house-backend --restart unless-stopped -p 5000:5000 \
+    --env-file Backend_Server/.env \
+    -v <path-to-firebase-credentials.json>:/app/database/firebase-credentials.json safe-house-image:latest
+
+Current production image: safe-house-image:latest
+
+
+== Verification performed ==
+- Every `from app.X import ...` / `import app.X` / `from database.X import ...` / `from entrypoints.X import ...`
+  statement in the codebase was checked against the file list above — all resolve.
+- No leftover references to the old pre-reorg paths (app.core.*, bare `database.py` imports, etc.) were found.
+- app/ai, app/alerts, app/monitoring, app/state have no __init__.py (unlike app/api, app/auth, app/weekly_summary).
+  This still works — Python 3 treats them as implicit namespace packages — but it's inconsistent with the rest
+  of app/. Not a blocker; flagging for optional cleanup.

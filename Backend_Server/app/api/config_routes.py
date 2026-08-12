@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from app.core.data_buffer import sensor_buffer
+from app.state.data_buffer import sensor_buffer
 from app.auth.decorators import house_member_required
 import database.database as database
 
@@ -63,7 +63,7 @@ def set_vacation_schedule():
         now = datetime.now()
         if start <= now <= end:
             database.set_vacation_mode(house_id, True)
-            from app.core.data_buffer import sensor_buffer
+            from app.state.data_buffer import sensor_buffer
             sensor_buffer.pause_house(house_id)
             sensor_buffer.clear_house(house_id)
     except Exception:

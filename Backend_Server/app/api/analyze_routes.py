@@ -1,15 +1,15 @@
 from flask import Blueprint, request, jsonify
-from app.core.data_buffer import sensor_buffer
-from app.core.house_mask_store import house_mask_store
+from app.state.data_buffer import sensor_buffer
+from app.state.house_mask_store import house_mask_store
 import database.database as database
 import database.user_db as user_db
-from app.core import notifications
-from app.core.ai_handler import evaluate_buffer_with_AI
-import app.core.device_health as device_health
-from app.core import alert_messages
+from app.alerts import notifications
+from app.ai.inference import evaluate_buffer_with_AI
+import app.monitoring.device_health as device_health
+from app.alerts import alert_messages
 
 # Import the global cache dictionary and download helper from your manager
-from app.weekly_summary.model_manager import HOUSES_MODELS_CACHE, download_model_from_firebase
+from app.ai.model_manager import HOUSES_MODELS_CACHE, download_model_from_firebase
 
 analyze_bp = Blueprint('analyze', __name__)
 
@@ -19,10 +19,10 @@ DEFAULT_LOCATION = [0, 0, 0, 0, 0, 0, 1]
 # In-memory cache for validated device tokens: {house_id: token}
 _device_token_cache = {}
 
-# Alert cooldown: {house_id: last_alert_datetime} — prevents duplicate alerts within 30 min
-from datetime import datetime, timedelta
-_last_alert_time: dict = {}
-_ALERT_COOLDOWN = timedelta(minutes=30)
+# Tracks the last finalized decision per house so a push notification only fires
+# on a transition INTO Warning/Emergency, not on every repeated reading of the
+# same state.
+_last_decision: dict = {}
 
 
 def _validate_device_token(house_id, token):
@@ -177,14 +177,16 @@ def analyze_data():
             final_decision = "Normal"       # Standard baseline routine
 
 
-        # Trigger push notifications only for Warning and Emergency states,
-        # with a 30-minute cooldown to avoid flooding the alert history.
+        # A push notification only fires when the house transitions INTO Warning or
+        # Emergency from a different state — not on every repeated reading of the
+        # same state (e.g. Emergency -> Emergency stays silent).
+        previous_decision = _last_decision.get(house_id)
+        status_changed = previous_decision != final_decision
+        _last_decision[house_id] = final_decision
+
+        title = None
+        body = None
         if final_decision in ["Warning", "Emergency"]:
-            now = datetime.now()
-            last = _last_alert_time.get(house_id)
-            if last and (now - last) < _ALERT_COOLDOWN:
-                return jsonify({"status": "success", "decision": final_decision, "fcm_status": "Cooldown"}), 200
-            _last_alert_time[house_id] = now
             # Enrich (never suppress) the alert with any sensors the health checker
             # currently suspects are faulty, so a device fault isn't mistaken for — nor
             # hides — a real emergency. Read from the shared in-process cache (no extra
@@ -193,36 +195,31 @@ def analyze_data():
             faulty_names = [device_health.SENSOR_NAMES.get(i, f'Sensor {i}')
                             for i in sorted(faulty_idx)]
             resident_name = house.get('resident_name') if house else None
-            # The real "last seen" time = the most recent moment any sensor fired, so the
-            # Stuck/Fall message reports actual last activity (possibly days ago) instead of
-            # the alert time. It's already on the house doc fetched above — no extra read.
-            last_activity_map = (house or {}).get('last_sensor_activity') or {}
-            last_seen_dt = max(last_activity_map.values(), default=None)
             # Compose a focused, situation-specific message from the AI's structured
-            # verdict (severity + activity type + worst-reconstructed room + last location).
+            # verdict (severity + anomaly type + zone + last location).
             title, body = alert_messages.compose_alert_message(
                 severity=final_decision,
                 activity_type=ai_meta.get('activity_type'),
                 room_index=ai_meta.get('room_index'),
                 resident_name=resident_name,
-                last_seen_dt=last_seen_dt,
                 last_location=data.get('current_location'),
                 faulty_sensor_names=faulty_names,
             )
-            database.log_ai_decision(house_id, ai_sensor, final_decision,
-                                     note=body, title=title)
+
+        # Every decision is logged — including Normal — so the dashboard can read a
+        # live current status instead of inferring it from alert silence/timeouts.
+        database.log_ai_decision(house_id, ai_sensor, final_decision,
+                                 note=body, title=title)
+
+        fcm_status = "Not Sent"
+        if final_decision in ["Warning", "Emergency"] and status_changed:
             notifications.send_alert_push(house_id, title, body)
-            return jsonify({
-                "status": "success", 
-                "decision": final_decision, 
-                "fcm_status": "Sent"
-            }), 200
-        
-        # For Normal state (including hosting scenarios mapped above)
+            fcm_status = "Sent"
+
         return jsonify({
-            "status": "success", 
-            "decision": "Normal", 
-            "fcm_status": "Not Sent"
+            "status": "success",
+            "decision": final_decision,
+            "fcm_status": fcm_status,
         }), 200
     except Exception as e:
         import traceback
