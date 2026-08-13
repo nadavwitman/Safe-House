@@ -57,6 +57,23 @@ def get_vacation_schedule(house_id):
     return None
 
 
+def get_vacation_state(house_id):
+    """Single house-doc read returning both the vacation flag and the schedule.
+
+    The 5-minute vacation scheduler needs both together; fetching them via
+    get_vacation_schedule() + get_vacation_mode() reads the same document twice
+    on every tick, for every house.
+    """
+    doc = db.collection('houses').document(house_id).get()
+    if not doc.exists:
+        return {'is_vacation': False, 'schedule': None}
+    data = doc.to_dict() or {}
+    return {
+        'is_vacation': data.get('is_vacation', False),
+        'schedule': data.get('vacation_schedule'),
+    }
+
+
 def clear_vacation_schedule(house_id):
     """Removes the vacation schedule from the house document."""
     db.collection('houses').document(house_id).update(

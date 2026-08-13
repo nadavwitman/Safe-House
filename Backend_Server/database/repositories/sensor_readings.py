@@ -24,10 +24,15 @@ def set_sensor_mask(house_id, mask):
     )
 
 
-def log_vector_reading(data, house_id='default_house'):
+def log_vector_reading(data, house_id='default_house', is_vacation=None):
     """
     Saves a sensor vector reading to a house's subcollection in Firestore.
     Structure: houses -> {house_id} -> sensor_vectors -> {auto_generated_doc}
+
+    `is_vacation` should be passed in by callers that already hold the house
+    document (the analyze route does — see app/api/analyze_routes.py). Leaving it
+    None makes this re-read the house doc, which on a per-minute sensor feed is a
+    second read of a document the caller just fetched.
     """
     raw_time = data.get('time')
     if isinstance(raw_time, str):
@@ -45,12 +50,15 @@ def log_vector_reading(data, house_id='default_house'):
     else:
         parsed_time = datetime.now(timezone.utc)
 
+    if is_vacation is None:
+        is_vacation = get_vacation_mode(house_id)
+
     doc_ref = db.collection('houses').document(house_id).collection('sensor_vectors').document()
     doc_ref.set({
         'sensor_vector': data.get('sensor_vector'),
         'time': parsed_time,
         'current_location': data.get('current_location'),
-        'is_vacation': get_vacation_mode(house_id),
+        'is_vacation': bool(is_vacation),
     })
     # Maintain a denormalized "last time each sensor fired (==1)" map on the house
     # document. Updated incrementally on every write, so the dashboard can show a

@@ -89,17 +89,23 @@ def analyze_data():
         if not _validate_device_token(house_id, device_token):
             return jsonify({"error": "Unauthorized device"}), 401
 
-        # Fetch house data to activate on first ping and retrieve fine-tuning generation count
+        # ONE house-document read per request. Everything below that needs house
+        # state (activation, fine-tune count, vacation flag, last known location)
+        # reads it off this dict — each of those used to issue its own Firestore
+        # get() of the very same document, tripling the read cost of the
+        # per-minute sensor feed.
         house = user_db.get_house(house_id)
         fine_tune_count = 0
-        
+        is_vacation = False
+
         if house:
             if not house.get('is_active', False):
                 user_db.activate_house(house_id)
                 print(f"[Activation] House {house_id} activated by first IoT reading.")
-            
+
             # Extract the fine-tune count for dynamic threshold decay in the AI handler
             fine_tune_count = house.get('model_metadata', {}).get('fine_tune_count', 0)
+            is_vacation = house.get('is_vacation', False)
 
         # Reconstruct the buffer from Firestore on cold start so a restart doesn't blind
         # the model for a full 6-hour window (must run before the buffer is read below).
@@ -113,7 +119,9 @@ def analyze_data():
             if isinstance(last_loc, list) and len(last_loc) == 7 and all(b in (0, 1) for b in last_loc):
                 current_location = last_loc
             else:
-                current_location = database.get_last_current_location(house_id)
+                # Read off the house dict fetched above rather than issuing a
+                # third get() for the same document.
+                current_location = house.get('last_current_location') if house else None
 
         # Inject resolved value into data before buffering
         data['current_location'] = current_location if current_location is not None else DEFAULT_LOCATION
@@ -123,7 +131,7 @@ def analyze_data():
 
         # Add to buffer and persist (now with resolved current_location)
         sensor_buffer.add_reading(data)
-        database.log_vector_reading(data, house_id)
+        database.log_vector_reading(data, house_id, is_vacation=is_vacation)
 
         # Aquire all current buffer data for processing
         buffer_data = sensor_buffer.get_all_readings(house_id)
@@ -180,7 +188,15 @@ def analyze_data():
         # A push notification only fires when the house transitions INTO Warning or
         # Emergency from a different state — not on every repeated reading of the
         # same state (e.g. Emergency -> Emergency stays silent).
+        #
+        # _last_decision lives in process memory and is wiped by every restart/deploy.
+        # On a cold start we recover the previous state from current_status on the
+        # house doc already fetched above (no extra read). Without this, the first
+        # reading after a restart always looks like a transition, which re-pushed a
+        # duplicate alert for an outage that was already reported.
         previous_decision = _last_decision.get(house_id)
+        if previous_decision is None and house:
+            previous_decision = house.get('current_status')
         status_changed = previous_decision != final_decision
         _last_decision[house_id] = final_decision
 
@@ -206,10 +222,13 @@ def analyze_data():
                 faulty_sensor_names=faulty_names,
             )
 
-        # Every decision is logged — including Normal — so the dashboard can read a
-        # live current status instead of inferring it from alert silence/timeouts.
-        database.log_ai_decision(house_id, ai_sensor, final_decision,
-                                 note=body, title=title)
+        # Only a genuine state CHANGE is recorded. log_ai_decision writes the
+        # ai_decisions event AND updates current_status on the house doc, so the
+        # dashboard still reads a live status in a single document read — without
+        # this collection accumulating 1,440 "Normal" heartbeats per house per day.
+        if status_changed:
+            database.log_ai_decision(house_id, ai_sensor, final_decision,
+                                     note=body, title=title)
 
         fcm_status = "Not Sent"
         if final_decision in ["Warning", "Emergency"] and status_changed:

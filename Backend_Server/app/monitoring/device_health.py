@@ -150,7 +150,14 @@ def _check_house_sensor_health(house_id, now):
 
 def check_device_connectivity():
     """Scheduled every 10 min. Alerts once when the ESP32 master has gone silent for
-    30+ minutes. Offline state is persisted in Firestore so it survives restarts."""
+    30+ minutes. Offline state is persisted in Firestore so it survives restarts.
+
+    Costs ONE Firestore read per house. This used to issue three separate get()s of
+    the same house document (vacation flag, offline-alert flag, resident name) plus
+    a sensor_vectors query for the newest reading — the latter being redundant, since
+    log_vector_reading already denormalizes that timestamp onto the house doc as
+    last_reading_at precisely so this check doesn't have to scan the subcollection.
+    """
     try:
         house_ids = user_db.get_all_active_house_ids()
     except Exception as e:
@@ -162,29 +169,35 @@ def check_device_connectivity():
 
     for house_id in house_ids:
         try:
-            if database.get_vacation_mode(house_id):
+            state = database.get_house_health_doc(house_id)   # single Firestore read
+            if state is None or state.get('is_vacation'):
                 continue
 
-            readings = database.get_recent_sensor_events(house_id, limit=1)
-            if not readings:
-                continue
-            last_time_str = readings[0].get('time')
-            if not last_time_str:
+            # last_reading_at is refreshed on EVERY post (even an all-zeros vector),
+            # so it is the authoritative "master last spoke" timestamp. None means the
+            # house has never reported — nothing to call an outage yet.
+            last_time = _as_utc(state.get('last_reading_at'))
+            if last_time is None:
                 continue
 
-            last_time = _as_utc(datetime.fromisoformat(last_time_str))
             silent_for = now - last_time
 
+            # clear_offline_alert_sent_at writes None rather than deleting the field,
+            # so an explicit type check keeps "cleared" and "never set" equivalent.
+            raw_sent_at = state.get('offline_alert_sent_at')
+            already_alerted = isinstance(raw_sent_at, datetime)
+
             if silent_for < threshold:
-                # Device is reporting — clear the flag so the next outage alerts again.
-                database.clear_offline_alert_sent_at(house_id)
+                # Device is reporting — clear the flag so the next outage alerts again,
+                # but only if it is actually set (saves a pointless write every run).
+                if already_alerted:
+                    database.clear_offline_alert_sent_at(house_id)
                 continue
 
-            if database.get_offline_alert_sent_at(house_id) is not None:
+            if already_alerted:
                 continue   # already alerted for this outage
 
-            house = user_db.get_house(house_id)
-            resident_name = house.get('resident_name', 'your resident') if house else 'your resident'
+            resident_name = state.get('resident_name') or 'your resident'
             minutes_silent = int(silent_for.total_seconds() // 60)
             notifications.trigger_device_offline_alert(house_id, resident_name, minutes_silent)
             database.log_device_offline_alert(house_id, minutes_silent)

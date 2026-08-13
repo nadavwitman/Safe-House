@@ -6,7 +6,6 @@ import '../../theme/colors.dart';
 import '../../widgets/shared_widgets.dart';
 import '../../services/auth_state.dart';
 import '../../services/house_service.dart';
-import '../../services/insights_service.dart';
 
 // ── Data ───────────────────────────────────────────────────────
 enum HouseStatus { clear, warning, emergency, vacation }
@@ -52,12 +51,15 @@ class _DashboardScreenState extends State<DashboardScreen>
   bool _refreshing = false;
   // Home-screen status derived from the latest AI decision (see _deriveStatus).
   HouseStatus _alertStatus = HouseStatus.clear;
-  DateTime? _lastStatusFetch;
 
   // How often to poll the backend for new sensor activity. The screen lives
   // inside an IndexedStack, so this keeps ticking across tab switches but is
   // paused while the app is backgrounded.
-  static const _pollInterval = Duration(seconds: 5);
+  //
+  // The ESP32 reports once a minute, so polling faster than that only re-reads
+  // data that cannot have changed. 30s keeps the "Xm ago" labels feeling live
+  // while costing one Firestore read per tick (see HouseService.getStatus).
+  static const _pollInterval = Duration(seconds: 30);
 
   @override
   void initState() {
@@ -99,7 +101,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     if (houseId == null) return;
     _refreshing = true;
     try {
-      final data = await HouseService.getRecentEvents(houseId);
+      final data = await HouseService.getStatus(houseId);
       final serverVacation = data['is_vacation'] as bool? ?? false;
       if (serverVacation != AuthState.instance.vacationMode) {
         await AuthState.instance.setVacationMode(serverVacation);
@@ -127,21 +129,11 @@ class _DashboardScreenState extends State<DashboardScreen>
         if (changed) _lastActivity.addAll(found);
       });
 
-      // Home status reflects the latest AI decision (now logged every analysis
-      // cycle, including Normal), so check it once a minute rather than on every
-      // 5-second poll.
-      final now = DateTime.now();
-      if (_lastStatusFetch == null ||
-          now.difference(_lastStatusFetch!) > const Duration(minutes: 1)) {
-        _lastStatusFetch = now;
-        try {
-          final alerts = await InsightsService.getAlerts(houseId, limit: 1);
-          final s = _deriveStatus(alerts);
-          if (mounted && s != _alertStatus) setState(() => _alertStatus = s);
-        } catch (_) {
-          // keep last-known status on a failed status poll
-        }
-      }
+      // Home status now arrives in the same payload — the server keeps
+      // current_status on the house document, so it costs no extra round trip
+      // and no extra Firestore read. This used to be a separate alerts query.
+      final s = _deriveStatus(data['current_status'] as String?);
+      if (s != _alertStatus) setState(() => _alertStatus = s);
     } catch (_) {
       // silently ignore — stale data stays on screen
     } finally {
@@ -149,13 +141,11 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 
-  /// Maps the most recent AI decision directly into a home-screen status. Every
-  /// analysis cycle now logs a decision (including Normal), so the latest entry
-  /// is a live, current signal rather than something that needs to time out.
-  HouseStatus _deriveStatus(List<Map<String, dynamic>> alerts) {
-    if (alerts.isEmpty) return HouseStatus.clear;
-    final latest = alerts.first; // endpoint returns newest first
-    final decision = (latest['decision'] as String? ?? '').toLowerCase();
+  /// Maps the server's current AI status into a home-screen status. The server
+  /// updates this on every state transition, so it is a live signal rather than
+  /// something that needs to time out.
+  HouseStatus _deriveStatus(String? currentStatus) {
+    final decision = (currentStatus ?? '').toLowerCase();
     if (decision.contains('emergency')) return HouseStatus.emergency;
     if (decision.contains('warning')) return HouseStatus.warning;
     return HouseStatus.clear;

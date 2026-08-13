@@ -32,6 +32,10 @@ def get_house_health_doc(house_id):
         'activated_at': data.get('activated_at'),
         'last_reading_at': data.get('last_reading_at'),
         'is_vacation': data.get('is_vacation', False),
+        # Used by check_device_connectivity, which is driven entirely off this
+        # single read — see app/monitoring/device_health.py.
+        'offline_alert_sent_at': data.get('offline_alert_sent_at'),
+        'resident_name': data.get('resident_name'),
     }
 
 

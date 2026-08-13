@@ -82,14 +82,17 @@ def check_vacation_schedules():
         now = datetime.now()
         for house_id in house_ids:
             try:
-                schedule = database.get_vacation_schedule(house_id)
+                # One read for both the schedule and the flag — fetching them
+                # separately re-read the same house document every 5 minutes.
+                state = database.get_vacation_state(house_id)
+                schedule = state['schedule']
                 if not schedule:
                     continue
                 start = datetime.fromisoformat(
                     f"{schedule['startDate']}T{schedule['startTime']}")
                 end = datetime.fromisoformat(
                     f"{schedule['endDate']}T{schedule['endTime']}")
-                is_vacation = database.get_vacation_mode(house_id)
+                is_vacation = state['is_vacation']
                 if start <= now <= end and not is_vacation:
                     database.set_vacation_mode(house_id, True)
                     sensor_buffer.pause_house(house_id)

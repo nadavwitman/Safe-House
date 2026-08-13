@@ -6,12 +6,35 @@ import database.database as database
 house_bp = Blueprint('house', __name__)
 
 
+@house_bp.route('/api/house/<house_id>/status', methods=['GET'])
+@house_member_required
+def get_house_status(house_id):
+    """Live dashboard poll — costs exactly ONE Firestore document read.
+
+    Everything the home screen renders is denormalized onto the house document:
+    the vacation flag, the per-sensor last-seen map (by log_vector_reading) and the
+    current AI status (by log_ai_decision). So this touches no subcollection at all.
+
+    The dashboard used to poll /recent-events?limit=50 every 5 seconds and discard
+    all 50 readings, then separately query ai_decisions for the live status — 51+
+    reads per poll, ~36k/hour, the bulk of our Firestore bill.
+    """
+    meta = database.get_house_activity_meta(house_id)
+    return jsonify({
+        'is_vacation': meta['is_vacation'],
+        'last_activity': meta['last_activity'],
+        'current_status': meta['current_status'],
+    }), 200
+
+
 @house_bp.route('/api/house/<house_id>/recent-events', methods=['GET'])
 @house_member_required
 def get_recent_events(house_id):
-    """Returns the most recent sensor readings for the dashboard activity feed,
-    plus a per-sensor last-activity map so each sensor's last-seen time is shown
-    even if it fired long before the recent window."""
+    """Returns the most recent sensor readings for a house's activity feed.
+
+    Costs `limit` document reads — do NOT use this for polling. The live
+    dashboard uses /status above; this is for on-demand history views only.
+    """
     limit = min(int(request.args.get('limit', 50)), 100)
     readings = database.get_recent_sensor_events(house_id, limit=limit)
     meta = database.get_house_activity_meta(house_id)

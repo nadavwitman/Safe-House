@@ -32,6 +32,7 @@ from database.repositories.vacation import (
     set_vacation_mode,
     set_vacation_schedule,
     get_vacation_schedule,
+    get_vacation_state,
     clear_vacation_schedule,
 )
 
