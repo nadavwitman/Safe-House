@@ -21,6 +21,10 @@ COPY Backend_Server/database/    database/
 COPY Backend_Server/entrypoints/ entrypoints/
 COPY AI_Model/                   AI_Model/
 
+# Per-house fine-tuned models are written here at runtime (see model_manager.py) and
+# should be backed by a mounted volume in production so they survive container recreation.
+RUN mkdir -p AI_Model/trained_models
+
 EXPOSE 5000
 
 ENV PYTHONUNBUFFERED=1 \

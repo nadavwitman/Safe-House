@@ -27,3 +27,7 @@ Docs/
 # AI_Model dev-only content not needed at runtime
 AI_Model/tests/
 AI_Model/training/
+
+# Per-house fine-tuned models — these are runtime state written to a mounted
+# volume on the server, never baked into the image (see model_manager.py).
+AI_Model/trained_models/

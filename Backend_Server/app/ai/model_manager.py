@@ -1,12 +1,18 @@
-import io
+import os
 import pickle
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
 import torch  # kept so unpickling serialized torch models resolves cleanly
-from firebase_admin import storage, firestore
+from firebase_admin import firestore
 from database.database import db, fetch_finetuning_data, FINETUNING_READING_TARGET
 from app.state.house_mask_store import house_mask_store
 from app.ai.fine_tuning import fine_tune_house_model
+from app.ai.model_paths import AI_MODEL_DIR
+
+# Local disk directory for persisted per-house models. Firebase Storage requires the
+# Blaze plan (out of scope — single house, single server), so fine-tuned models are
+# kept on the server's own filesystem and overwritten on every retrain.
+TRAINED_MODELS_DIR = os.path.join(AI_MODEL_DIR, "trained_models")
 
 # Global In-Memory Cache (RAM) to store loaded house models
 HOUSES_MODELS_CACHE = {}
@@ -26,25 +32,26 @@ MAX_CONCURRENT_WORKERS = 1  # One house at a time — the gunicorn process only 
 MAX_HOUSES_PER_RUN = 1
 
 
+def _house_model_path(house_id):
+    return os.path.join(TRAINED_MODELS_DIR, house_id, "anomaly_detector.pkl")
+
+
 def download_model_from_firebase(house_id):
     """
-    Fetches a serialized house-specific model from Firebase Storage 
-    and deserializes it directly into RAM to eliminate disk I/O bottlenecks.
+    Loads a serialized house-specific model from local disk into RAM.
+    (Name kept for compatibility with existing callers.)
     """
+    path = _house_model_path(house_id)
     try:
-        bucket = storage.bucket()
-        blob = bucket.blob(f"models/{house_id}/anomaly_detector.pkl")
-        
-        if not blob.exists():
-            print(f"[MLOps] No custom model found in Firebase Storage for house: {house_id}")
+        if not os.path.exists(path):
+            print(f"[MLOps] No custom model found on disk for house: {house_id}")
             return None
 
-        # Download blob binary stream straight into a local RAM variable
-        model_bytes = blob.download_as_bytes()
-        model_instance = pickle.loads(model_bytes)
-        print(f"[MLOps] Successfully fetched and deserialized model for house: {house_id}")
+        with open(path, "rb") as f:
+            model_instance = pickle.load(f)
+        print(f"[MLOps] Successfully loaded model for house: {house_id}")
         return model_instance
-        
+
     except Exception as e:
         print(f"[MLOps] Exception raised during model retrieval for house {house_id}: {str(e)}")
         return None
@@ -89,15 +96,12 @@ def auto_train_house_model(house_id):
             print(f"[MLOps Worker] Fine-tuning aborted or failed for {house_id}.")
             return False
 
-        # 5. Serialize the returned updated PyTorch model
-        buffer = io.BytesIO()
-        pickle.dump(updated_model, buffer)
-        buffer.seek(0)
-
-        # 6. Push the real model payload back to Firebase Storage
-        bucket = storage.bucket()
-        blob = bucket.blob(f"models/{house_id}/anomaly_detector.pkl")
-        blob.upload_from_string(buffer.getvalue(), content_type="application/octet-stream")
+        # 5. Serialize and persist the updated model to local disk, overwriting
+        # whatever was there from the previous fine-tune.
+        path = _house_model_path(house_id)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as f:
+            pickle.dump(updated_model, f)
 
         # Fetch current count (defaults to 0 if it's the first time)
         current_metadata = db.collection('houses').document(house_id).get().to_dict().get('model_metadata', {})

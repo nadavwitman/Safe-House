@@ -91,11 +91,12 @@ Backend_Server/tests/                        (pytest suite)
 Backend_Server/scripts/                      (backfill_last_activity.py — one-off maintenance script, run manually if ever needed)
 Backend_Server/pytest.ini
 Backend_Server/requirements-test.txt
-AI_Model/tests/                              (excluded manually above — current Dockerfile's `COPY AI_Model/` does NOT
-                                               exclude this via .dockerignore yet, so today it still gets copied into
-                                               the image unnecessarily. Recommend adding AI_Model/tests/ and
-                                               AI_Model/training/ to .dockerignore before the next build.)
-AI_Model/training/                           (same as above — notebooks, not needed at runtime)
+AI_Model/tests/                              (excluded via .dockerignore — not copied into the image)
+AI_Model/training/                           (excluded via .dockerignore — notebooks, not needed at runtime)
+AI_Model/trained_models/                     (excluded via .dockerignore — runtime state, created empty in the
+                                               image by `RUN mkdir -p AI_Model/trained_models` in the Dockerfile,
+                                               then populated via the `safe-house-trained-models` volume mount
+                                               below, not baked into the image)
 
 
 ================================================================================
@@ -123,14 +124,22 @@ Update code (build from repo root, test on 5001, then swap into 5000):
   cd <repo root on server>
   sudo docker build -f Backend_Server/Dockerfile -t safe-house-image:candidate .
   sudo docker run -d --name sh-test -p 5001:5000 --env-file Backend_Server/.env \
-    -v <path-to-firebase-credentials.json>:/app/database/firebase-credentials.json safe-house-image:candidate
+    -v <path-to-firebase-credentials.json>:/app/database/firebase-credentials.json \
+    -v safe-house-trained-models:/app/AI_Model/trained_models safe-house-image:candidate
   sudo docker logs -f sh-test   # confirm clean boot, then: sudo docker rm -f sh-test
   sudo docker tag safe-house-image:latest safe-house-image:rollback-$(date +%Y%m%d-%H%M%S)
   sudo docker stop safe-house-backend && sudo docker rm safe-house-backend
   sudo docker tag safe-house-image:candidate safe-house-image:latest
   sudo docker run -d --name safe-house-backend --restart unless-stopped -p 5000:5000 \
     --env-file Backend_Server/.env \
-    -v <path-to-firebase-credentials.json>:/app/database/firebase-credentials.json safe-house-image:latest
+    -v <path-to-firebase-credentials.json>:/app/database/firebase-credentials.json \
+    -v safe-house-trained-models:/app/AI_Model/trained_models safe-house-image:latest
+
+Fine-tuned per-house models are now stored on local disk (AI_Model/trained_models/{house_id}/anomaly_detector.pkl,
+one file overwritten per retrain — see app/ai/model_manager.py) instead of Firebase Storage, since Storage
+requires the Blaze billing plan. The named volume `safe-house-trained-models` above is REQUIRED — without it,
+every `docker rm` + `docker run` update wipes fine-tuned models and each house starts back from the base
+checkpoint (AI_Model/model/best_safe_house_model.pth).
 
 Current production image: safe-house-image:latest
 

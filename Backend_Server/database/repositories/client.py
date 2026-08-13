@@ -8,8 +8,6 @@ CRED_PATH = os.environ.get('FIREBASE_CREDENTIALS_PATH') or os.path.join(BASE_DIR
 # Initialize Firebase application if not already initialized
 if not firebase_admin._apps:
     cred = credentials.Certificate(CRED_PATH)
-    firebase_admin.initialize_app(cred, {
-        'storageBucket': 'safe-house-492613.appspot.com'
-    })
+    firebase_admin.initialize_app(cred)
 
 db = firestore.client()
