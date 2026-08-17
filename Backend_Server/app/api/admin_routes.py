@@ -116,6 +116,9 @@ def get_house(house_id):
         'emergency_contact_phone': house.get('emergency_contact_phone'),
         'is_active': house.get('is_active', False),
         'invite_code': house.get('invite_code'),
+        # The installing admin needs this to re-flash or verify a unit long after
+        # the create screen is gone, and @admin_required already gates the route.
+        'device_token': house.get('device_token'),
         'sensor_mask': house_mask_store.get_mask(house_id),
         'users': users,
     }), 200

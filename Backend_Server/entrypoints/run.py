@@ -15,7 +15,7 @@ import database.database as database
 # Single source of truth — the health checks live in the app package so they ship in
 # the Docker image (this file does not). Imported here only for the local dev server.
 from app.monitoring.device_health import check_device_connectivity, check_sensor_health
-from app.weekly_summary.report_generator import run_insights_pipeline
+from app.weekly_summary.report_generator import generate_and_store
 
 app = create_app()
 
@@ -28,29 +28,17 @@ def scheduled_weekly_insights():
             print("[Scheduler] No active houses found — skipping weekly insights.")
             return
 
-        from firebase_admin import firestore as _firestore
-
         for house_id in house_ids:
             try:
                 print(f"[Scheduler] Generating weekly insights for house: {house_id}")
-                raw_docs = database.get_weekly_sensor_data(house_id)
-                metrics, ai_output = run_insights_pipeline(house_id, raw_docs)
-
-                if metrics is None:
-                    print(f"[Scheduler] Skipping {house_id} — insufficient data.")
-                    continue
-
-                period_start = min(d['date'] for d in metrics['days'])
-                period_end = max(d['date'] for d in metrics['days'])
-
-                report_dict = {
-                    'period': {'start': period_start, 'end': period_end},
-                    'generated_at': _firestore.SERVER_TIMESTAMP,
-                    'metrics': metrics,
-                    'ai_output': ai_output,
-                }
-                database.save_weekly_report(house_id, report_dict)
-                print(f"[Scheduler] Report saved for house: {house_id}")
+                # The only caller that may advance the EMA baseline — this runs
+                # once a week, which is the cadence the baseline assumes. The
+                # lazy catch-up deliberately does not.
+                status, _ = generate_and_store(house_id, advance_baseline=True)
+                if status == 'success':
+                    print(f"[Scheduler] Report saved for house: {house_id}")
+                else:
+                    print(f"[Scheduler] Skipping {house_id} — {status}.")
 
             except Exception as e:
                 print(f"[Scheduler] Error generating report for house {house_id}: {e}")
@@ -74,12 +62,12 @@ def scheduled_fine_tuning_job():
 
 def check_vacation_schedules():
     """Auto-activates/deactivates vacation mode based on stored schedules."""
-    from datetime import datetime
     import database.user_db as user_db
     from app.state.data_buffer import sensor_buffer
+    from app.scheduling.vacation_window import parse_window, now_utc
     try:
         house_ids = user_db.get_all_active_house_ids()
-        now = datetime.now()
+        now = now_utc()
         for house_id in house_ids:
             try:
                 # One read for both the schedule and the flag — fetching them
@@ -88,10 +76,13 @@ def check_vacation_schedules():
                 schedule = state['schedule']
                 if not schedule:
                     continue
-                start = datetime.fromisoformat(
-                    f"{schedule['startDate']}T{schedule['startTime']}")
-                end = datetime.fromisoformat(
-                    f"{schedule['endDate']}T{schedule['endTime']}")
+                # Absolute instants, so a server in a different timezone from the
+                # phone that wrote the trip still starts it on time.
+                window = parse_window(schedule)
+                if window is None:
+                    print(f"[Scheduler] Unparseable vacation schedule for {house_id} — skipping.")
+                    continue
+                start, end = window
                 is_vacation = state['is_vacation']
                 if start <= now <= end and not is_vacation:
                     database.set_vacation_mode(house_id, True)

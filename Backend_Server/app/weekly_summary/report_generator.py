@@ -3,6 +3,7 @@ import os
 import time
 from datetime import date as _date
 
+from firebase_admin import firestore
 from google import genai
 from google.genai import types
 
@@ -183,10 +184,20 @@ def generate_weekly_report(compact_prompt):
 # Pipeline orchestrator
 # ---------------------------------------------------------------------------
 
-def run_insights_pipeline(house_id, raw_docs):
+def run_insights_pipeline(house_id, raw_docs, advance_baseline=True):
     """
     Full pipeline: load mask → load baseline → aggregate → compute deltas
-    → save baseline → format prompt → call Gemini.
+    → format prompt → call Gemini.
+
+    advance_baseline decides whether this run moves the EMA baseline forward. The
+    baseline is the reference every week-over-week delta is measured against, and
+    each update pulls it 5% toward the week just measured — so only the scheduled
+    weekly run may advance it. An on-demand or repeated run must pass False, or
+    re-running it a few times would drag the baseline toward the current week and
+    quietly flatten the very deltas the report is reporting.
+
+    Saving the report is the caller's job: it owns the period and generated_at
+    that wrap this output into the stored document.
 
     Returns (metrics_dict, ai_output_dict), or (None, None) if fewer than 5 distinct days.
     """
@@ -211,10 +222,43 @@ def run_insights_pipeline(house_id, raw_docs):
     metrics['deltas'] = deltas
 
     # Persist baseline before Gemini call so it's saved even if AI fails
-    database.save_baseline(house_id, new_baseline)
+    if advance_baseline:
+        database.save_baseline(house_id, new_baseline)
 
     compact_prompt = format_compact_prompt(metrics, house_id)
     ai_output      = generate_weekly_report(compact_prompt)
-    database.save_weekly_report(house_id, ai_output)
 
     return metrics, ai_output
+
+
+def generate_and_store(house_id, advance_baseline):
+    """Runs the pipeline for one house and persists the result.
+
+    Returns (status, report) where status is 'success', 'no_data' or
+    'insufficient_data', and report is the stored document (None unless
+    successful).
+
+    Every producer goes through here — the weekly scheduler, the lazy catch-up
+    and the ops endpoint — so the shape of a stored report, and the fact that
+    period and generated_at wrap the pipeline's output, is defined once.
+    """
+    raw_docs = database.get_weekly_sensor_data(house_id)
+    if not raw_docs:
+        return 'no_data', None
+
+    metrics, ai_output = run_insights_pipeline(
+        house_id, raw_docs, advance_baseline=advance_baseline)
+    if metrics is None:
+        return 'insufficient_data', None
+
+    report = {
+        'period': {
+            'start': min(d['date'] for d in metrics['days']),
+            'end':   max(d['date'] for d in metrics['days']),
+        },
+        'generated_at': firestore.SERVER_TIMESTAMP,
+        'metrics': metrics,
+        'ai_output': ai_output,
+    }
+    database.save_weekly_report(house_id, report)
+    return 'success', report

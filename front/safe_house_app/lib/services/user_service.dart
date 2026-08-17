@@ -3,10 +3,21 @@ import 'auth_state.dart';
 import 'notification_service.dart';
 
 class UserService {
+  /// Loads the account and registers this device for push. Use at sign-in and
+  /// launch — the two moments where the push registration genuinely needs
+  /// refreshing.
   static Future<AppUser> getProfile() async {
+    final user = await refresh();
+    await NotificationService.registerToken();
+    return user;
+  }
+
+  /// Re-reads the account without touching push registration, for the routine
+  /// freshening the Profile tab does whenever it becomes visible. Re-POSTing an
+  /// unchanged FCM token on every visit is a write the server does not need.
+  static Future<AppUser> refresh() async {
     final data = await ApiClient.get('/api/user/me');
     AuthState.instance.setUser(data);
-    await NotificationService.registerToken();
     return AuthState.instance.currentUser!;
   }
 

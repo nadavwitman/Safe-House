@@ -76,14 +76,9 @@ def log_sensor_fault_alert(house_id, sensor_index, sensor_name, hours_silent):
     })
 
 
-def get_offline_alert_sent_at(house_id):
-    """Returns the datetime an offline alert was last sent, or None."""
-    doc = db.collection('houses').document(house_id).get()
-    if doc.exists:
-        val = doc.to_dict().get('offline_alert_sent_at')
-        if isinstance(val, datetime):
-            return val
-    return None
+# There is no per-house getter for offline_alert_sent_at. check_device_connectivity
+# reads that field off the bulk house scan it already performs, so fetching it one
+# document at a time would add a read per house on every sweep.
 
 
 def set_offline_alert_sent_at(house_id, ts):

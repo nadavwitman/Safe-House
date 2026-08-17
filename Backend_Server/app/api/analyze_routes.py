@@ -19,10 +19,27 @@ DEFAULT_LOCATION = [0, 0, 0, 0, 0, 0, 1]
 # In-memory cache for validated device tokens: {house_id: token}
 _device_token_cache = {}
 
-# Tracks the last finalized decision per house so a push notification only fires
-# on a transition INTO Warning/Emergency, not on every repeated reading of the
-# same state.
-_last_decision: dict = {}
+# Tracks the last alert signature per house so a push notification only fires on a
+# transition INTO a *different* alert, not on every repeated reading of the same one.
+# Keyed by house_id, holding the value of _alert_key() from the previous cycle.
+_last_alert_key: dict = {}
+
+
+def _alert_key(decision, ai_meta):
+    """Identity of the alert currently in effect, as a stable string.
+
+    Severity alone is too coarse: a house that moves from a Missing-Usage Warning
+    to a High-Frequency Warning stays 'Warning', so keying on severity would leave
+    the dashboard showing the stale first message with its original timestamp.
+    The anomaly type and zone are exactly what compose_alert_message renders, so
+    including them means the key changes precisely when the displayed alert does.
+
+    Normal collapses to a single key — an unremarkable house has no anomaly type
+    or zone to distinguish, and every Normal reading is the same non-event.
+    """
+    if decision == 'Normal':
+        return 'Normal'
+    return f"{decision}|{ai_meta.get('activity_type')}|{ai_meta.get('room_index')}"
 
 
 def _validate_device_token(house_id, token):
@@ -185,20 +202,34 @@ def analyze_data():
             final_decision = "Normal"       # Standard baseline routine
 
 
-        # A push notification only fires when the house transitions INTO Warning or
-        # Emergency from a different state — not on every repeated reading of the
-        # same state (e.g. Emergency -> Emergency stays silent).
+        # A push notification only fires when the house transitions INTO a different
+        # alert — not on every repeated reading of the same one (e.g. the same
+        # Emergency re-detected each minute stays silent).
         #
-        # _last_decision lives in process memory and is wiped by every restart/deploy.
-        # On a cold start we recover the previous state from current_status on the
-        # house doc already fetched above (no extra read). Without this, the first
-        # reading after a restart always looks like a transition, which re-pushed a
-        # duplicate alert for an outage that was already reported.
-        previous_decision = _last_decision.get(house_id)
-        if previous_decision is None and house:
-            previous_decision = house.get('current_status')
-        status_changed = previous_decision != final_decision
-        _last_decision[house_id] = final_decision
+        # "Different" is judged on the full alert signature, not just the severity:
+        # a Missing-Usage Warning followed by a High-Frequency Warning is a new
+        # anomaly with a new message, and must refresh the alert the dashboard shows
+        # along with its timestamp. Keying on severity alone left the house sitting
+        # on the first Warning's text until it happened to recover to Normal.
+        #
+        # _last_alert_key lives in process memory and is wiped by every restart/deploy.
+        # On a cold start we recover the previous key from the house doc already
+        # fetched above (no extra read). Without this, the first reading after a
+        # restart always looks like a transition, which re-pushed a duplicate alert
+        # for a situation that was already reported.
+        current_key = _alert_key(final_decision, ai_meta)
+        previous_key = _last_alert_key.get(house_id)
+        legacy_status = None
+        if previous_key is None and house:
+            previous_key = house.get('current_alert_key')
+            if previous_key is None:
+                # House doc predates current_alert_key. Compare on the coarse status
+                # it does carry, so the migration doesn't re-push every live alert.
+                legacy_status = house.get('current_status')
+
+        status_changed = (legacy_status != final_decision) if legacy_status is not None \
+            else (previous_key != current_key)
+        _last_alert_key[house_id] = current_key
 
         title = None
         body = None
@@ -228,7 +259,7 @@ def analyze_data():
         # this collection accumulating 1,440 "Normal" heartbeats per house per day.
         if status_changed:
             database.log_ai_decision(house_id, ai_sensor, final_decision,
-                                     note=body, title=title)
+                                     note=body, title=title, alert_key=current_key)
 
         fcm_status = "Not Sent"
         if final_decision in ["Warning", "Emergency"] and status_changed:

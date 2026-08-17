@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../theme/colors.dart';
 import '../../widgets/shared_widgets.dart';
+import '../../services/alert_ack_store.dart';
 import '../../services/auth_state.dart';
 import '../../services/house_service.dart';
 
@@ -52,6 +54,31 @@ class _DashboardScreenState extends State<DashboardScreen>
   // Home-screen status derived from the latest AI decision (see _deriveStatus).
   HouseStatus _alertStatus = HouseStatus.clear;
 
+  // ── Alert banner state ───────────────────────────────────────
+  // `current_status_at` from the poll: the moment the house entered its current
+  // status. It doubles as the alert's identity — the server rewrites it whenever a
+  // *different* anomaly takes over, including one of the same severity, so a change
+  // here means "a new alert is in effect" and nothing else does.
+  String? _alertAt;
+  // The alert's message, denormalized onto the house doc and delivered by the same
+  // poll as the status. Null on a house whose current alert predates those fields,
+  // which _bannerTitle/_bannerBody cover with generic per-severity text.
+  String? _alertTitle;
+  String? _alertNote;
+  // The ai_decisions document id of the alert in effect — the same id the Alerts tab
+  // acknowledges against, which is what lets the two screens agree.
+  String? _alertId;
+  // Whether _alertId has been acknowledged on this device. Device-local by design:
+  // acknowledging hides the banner on this phone only, and never touches the house's
+  // real status — the hero keeps showing (and pulsing) Warning/Emergency until the
+  // AI itself recovers.
+  bool _alertAcked = false;
+  // Which _alertId the flag above was read for, so the store is consulted once per
+  // alert rather than on every 30s poll.
+  String? _ackCheckedFor;
+  // Guards against a stale house's alert state bleeding into a newly selected one.
+  String? _stateForHouse;
+
   // How often to poll the backend for new sensor activity. The screen lives
   // inside an IndexedStack, so this keeps ticking across tab switches but is
   // paused while the app is backgrounded.
@@ -65,14 +92,23 @@ class _DashboardScreenState extends State<DashboardScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // The Profile tab can turn vacation on or off while this screen sits alive
+    // but unbuilt in the IndexedStack. Without this the hero kept its old state
+    // until a poll happened to land, up to 30s later.
+    AuthState.instance.vacationMode.addListener(_onVacationChanged);
     _startPolling();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    AuthState.instance.vacationMode.removeListener(_onVacationChanged);
     _stopPolling();
     super.dispose();
+  }
+
+  void _onVacationChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -101,9 +137,32 @@ class _DashboardScreenState extends State<DashboardScreen>
     if (houseId == null) return;
     _refreshing = true;
     try {
+      // Switching houses must not carry the previous house's alert (or the
+      // acknowledgement of it) across — reset before the first poll lands.
+      if (_stateForHouse != houseId) {
+        _stateForHouse = houseId;
+        _alertAt = null;
+        _alertId = null;
+        _alertTitle = null;
+        _alertNote = null;
+        _alertAcked = false;
+        _ackCheckedFor = null;
+        AuthState.instance.currentAlertId.value = null;
+        // Stale until this poll returns the new house's value. Left set, the
+        // Summary tab would compare the new house's cached report against the
+        // previous house's timestamp and re-download for nothing.
+        AuthState.instance.weeklyReportAt.value = null;
+      }
       final data = await HouseService.getStatus(houseId);
+
+      // Nothing on this screen uses it — the Summary tab does, as the cache key
+      // that tells it whether its stored report is still the current one. It
+      // rides along on this poll so the summary never has to poll for itself.
+      AuthState.instance.weeklyReportAt.value =
+          data['weekly_report_at'] as String?;
+
       final serverVacation = data['is_vacation'] as bool? ?? false;
-      if (serverVacation != AuthState.instance.vacationMode) {
+      if (serverVacation != AuthState.instance.vacationMode.value) {
         await AuthState.instance.setVacationMode(serverVacation);
       }
       // last_activity is a server-maintained map {sensorIndex: isoTime} of the
@@ -129,11 +188,38 @@ class _DashboardScreenState extends State<DashboardScreen>
         if (changed) _lastActivity.addAll(found);
       });
 
-      // Home status now arrives in the same payload — the server keeps
-      // current_status on the house document, so it costs no extra round trip
-      // and no extra Firestore read. This used to be a separate alerts query.
+      // Home status and the banner's whole content now arrive in this one payload —
+      // the server keeps all of it on the house document, so drawing the banner
+      // costs no extra round trip and no extra Firestore read. This used to be a
+      // status field plus a follow-up query into the alert history.
       final s = _deriveStatus(data['current_status'] as String?);
-      if (s != _alertStatus) setState(() => _alertStatus = s);
+      final statusAt = data['current_status_at'] as String?;
+      final alertId = data['current_alert_id'] as String?;
+      // The Alerts tab prunes acknowledgements against its 7-day window; this tells
+      // it which id to spare, since a long-running alert is still on this banner
+      // after it has aged out of that list.
+      AuthState.instance.currentAlertId.value = alertId;
+      if (s != _alertStatus ||
+          statusAt != _alertAt ||
+          alertId != _alertId) {
+        setState(() {
+          _alertStatus = s;
+          _alertAt = statusAt;
+          _alertId = alertId;
+          _alertTitle = data['current_alert_title'] as String?;
+          _alertNote = data['current_alert_note'] as String?;
+        });
+      }
+
+      // A newly-seen alert may already have been acknowledged in the Alerts tab, so
+      // the banner has to ask before it draws. Reading it here rather than per build
+      // keeps SharedPreferences off the paint path.
+      if (alertId != null && alertId != _ackCheckedFor) {
+        _ackCheckedFor = alertId;
+        final acked = await AlertAckStore.read(houseId);
+        if (!mounted) return;
+        setState(() => _alertAcked = acked.contains(alertId));
+      }
     } catch (_) {
       // silently ignore — stale data stays on screen
     } finally {
@@ -151,6 +237,54 @@ class _DashboardScreenState extends State<DashboardScreen>
     return HouseStatus.clear;
   }
 
+  /// The banner's headline. The server composes a situation-specific title and
+  /// sends it with the status; this generic wording only appears on a house whose
+  /// current alert was recorded before that field existed, and only until the AI
+  /// next writes a decision.
+  String get _bannerTitle {
+    final title = _alertTitle;
+    if (title != null && title.isNotEmpty) return title;
+    return _alertStatus == HouseStatus.emergency
+        ? 'Emergency detected'
+        : 'Unusual pattern detected';
+  }
+
+  String get _bannerBody {
+    final note = _alertNote;
+    if (note != null && note.isNotEmpty) return note;
+    return _alertStatus == HouseStatus.emergency
+        ? 'The system flagged something that needs attention now. Please check on '
+            'things.'
+        : 'The system noticed activity that falls outside the usual routine.';
+  }
+
+  /// Acknowledge — marks the alert read on this device, hiding the banner here and
+  /// clearing it from Unread in the Alerts tab, which reads the same store. There is
+  /// deliberately no server call: the alert stays in the Alerts tab as history, and
+  /// the house's status is the AI's to change, not the reader's.
+  Future<void> _acknowledge() async {
+    final houseId = AuthState.instance.activeHouseId;
+    final id = _alertId;
+    if (houseId == null || id == null) return;
+    setState(() => _alertAcked = true);
+    await AlertAckStore.add(houseId, id);
+    // The Alerts tab owns the badge count and may not be built yet, so decrement
+    // here rather than waiting for it to notice. It recomputes from scratch on its
+    // next load, which corrects any drift.
+    final unread = AuthState.instance.unreadAlerts;
+    if (unread.value > 0) unread.value -= 1;
+  }
+
+  Future<void> _callContact(String phone) async {
+    final uri = Uri(scheme: 'tel', path: phone.replaceAll(' ', ''));
+    final ok = await launchUrl(uri).catchError((_) => false);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not start a call to $phone')),
+      );
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -165,7 +299,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           );
     final residentName =
         activeHouse?['resident_name'] as String? ?? 'your house';
-    final isVacation = auth.vacationMode;
+    final isVacation = auth.vacationMode.value;
     final status = isVacation ? HouseStatus.vacation : _alertStatus;
     final rawMask = activeHouse?['sensor_mask'] as List<dynamic>?;
     final mask = (rawMask != null && rawMask.length == 7)
@@ -175,6 +309,21 @@ class _DashboardScreenState extends State<DashboardScreen>
       for (int i = 0; i < _sensors.length; i++)
         if (mask[i]) (index: i, sensor: _sensors[i]),
     ];
+    // Vacation silences alerts, so the banner follows the hero and stays hidden.
+    // Acknowledging hides only this alert — a different anomaly taking over gets a
+    // new id, so it reappears without the user having to un-acknowledge anything.
+    //
+    // Note this no longer waits on a fetched message: the text arrives with the
+    // status, and a house with no stored message still draws the banner using the
+    // generic wording. A Warning the family can't see is worse than one described
+    // in plain terms.
+    final showBanner = !isVacation &&
+        (_alertStatus == HouseStatus.warning ||
+            _alertStatus == HouseStatus.emergency) &&
+        _alertAt != null &&
+        !_alertAcked;
+    final phone =
+        (activeHouse?['emergency_contact_phone'] as String?)?.trim() ?? '';
 
     return Scaffold(
       backgroundColor: AppColors.bgCream,
@@ -234,6 +383,17 @@ class _DashboardScreenState extends State<DashboardScreen>
                 child: Column(
                   children: [
                     _StatusHero(status: status, residentName: residentName),
+                    if (showBanner) ...[
+                      const SizedBox(height: 14),
+                      _AlertBanner(
+                        emergency: _alertStatus == HouseStatus.emergency,
+                        title: _bannerTitle,
+                        note: _bannerBody,
+                        at: _alertAt,
+                        onCall: phone.isEmpty ? null : () => _callContact(phone),
+                        onAcknowledge: _acknowledge,
+                      ),
+                    ],
                     const SizedBox(height: 14),
                     Row(
                       children: [
@@ -297,6 +457,8 @@ class _StatusHero extends StatefulWidget {
 class _StatusHeroState extends State<_StatusHero>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
+  late Animation<double> _scaleAnim;
+  late Animation<double> _opacityAnim;
 
   @override
   void initState() {
@@ -305,6 +467,37 @@ class _StatusHeroState extends State<_StatusHero>
       vsync: this,
       duration: const Duration(milliseconds: 2400),
     );
+    // The outer ring expands past the card while fading out, so the alert reads as
+    // a radiating pulse. Opacity finishes at 80% of the cycle, letting the ring
+    // vanish before it reaches full size instead of popping out of existence.
+    _scaleAnim = Tween<double>(begin: 1.0, end: 2.4).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+    );
+    _opacityAnim = Tween<double>(begin: 0.35, end: 0.0).animate(
+      CurvedAnimation(
+          parent: _controller,
+          curve: const Interval(0.0, 0.8, curve: Curves.linear)),
+    );
+    _syncAnimation();
+  }
+
+  @override
+  void didUpdateWidget(_StatusHero oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.status != widget.status) _syncAnimation();
+  }
+
+  /// Only Warning/Emergency pulse. Stopping (rather than leaving it running behind
+  /// an invisible ring) keeps a calm house off the vsync path entirely.
+  void _syncAnimation() {
+    final pulse = widget.status == HouseStatus.warning ||
+        widget.status == HouseStatus.emergency;
+    if (pulse) {
+      _controller.repeat();
+    } else {
+      _controller.stop();
+      _controller.reset();
+    }
   }
 
   @override
@@ -408,7 +601,28 @@ class _StatusHeroState extends State<_StatusHero>
                     shape: BoxShape.circle,
                   ),
                 ),
-                if (isVacation)
+                // Outer ring — pulses for warning/emergency, dashed for vacation,
+                // static otherwise.
+                if (isAlerting)
+                  AnimatedBuilder(
+                    animation: _controller,
+                    builder: (_, _) => Transform.scale(
+                      scale: _scaleAnim.value,
+                      child: Container(
+                        width: 118,
+                        height: 118,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color:
+                                accentColor.withValues(alpha: _opacityAnim.value),
+                            width: 1.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                else if (isVacation)
                   CustomPaint(
                     size: const Size(118, 118),
                     painter: _DashedCirclePainter(
@@ -512,6 +726,142 @@ class _DashedCirclePainter extends CustomPainter {
   @override
   bool shouldRepaint(_DashedCirclePainter old) =>
       color != old.color || strokeWidth != old.strokeWidth;
+}
+
+// ── Alert Banner ───────────────────────────────────────────────
+/// The alert in effect, shown directly under the status hero.
+///
+/// It carries the server-composed message verbatim — the same `title` and `note`
+/// the Alerts tab renders — so there is nothing further to drill into and no
+/// "View details" affordance. Only two actions are offered: reach the emergency
+/// contact, and dismiss.
+class _AlertBanner extends StatelessWidget {
+  final bool emergency;
+  final String? title;
+  final String? note;
+  final String? at;
+  // Null when the house has no emergency contact on file — that alone hides the
+  // Call button, so the number itself never needs to reach this widget.
+  final VoidCallback? onCall;
+  final VoidCallback onAcknowledge;
+
+  const _AlertBanner({
+    required this.emergency,
+    required this.title,
+    required this.note,
+    required this.at,
+    required this.onCall,
+    required this.onAcknowledge,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = emergency ? AppColors.alertSoft : AppColors.warnSoft;
+    final bd = emergency ? const Color(0xFFE6BFB1) : const Color(0xFFEAD7A4);
+    final fg = emergency ? const Color(0xFF7A3727) : const Color(0xFF7A5419);
+    final dotBg = emergency ? const Color(0xFFE89B86) : const Color(0xFFD9B36C);
+    final timeFg =
+        emergency ? const Color(0xFF9C5840) : const Color(0xFF9C7A2F);
+
+    final parsedAt = DateTime.tryParse(at ?? '')?.toLocal();
+    final heading = (title != null && title!.isNotEmpty)
+        ? title!
+        : (emergency ? 'Emergency' : 'Heads Up');
+    final body = (note != null && note!.isNotEmpty)
+        ? note!
+        : (emergency
+            ? 'Unusual activity that may need immediate attention.'
+            : 'A small anomaly was detected.');
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: bg,
+        border: Border.all(color: bd),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(color: dotBg, shape: BoxShape.circle),
+            child: Icon(
+                emergency
+                    ? Icons.warning_amber_rounded
+                    : Icons.notifications_none,
+                size: 20,
+                color: Colors.white),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(heading,
+                          style: GoogleFonts.manrope(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w700,
+                              color: fg,
+                              height: 1.3)),
+                    ),
+                    const SizedBox(width: 8),
+                    // Blank rather than _relTime's "No data yet" fallback — an
+                    // unparseable stamp should drop the time, not caption a live
+                    // alert as having no data.
+                    if (parsedAt != null)
+                      Text(_relTime(parsedAt),
+                          style: GoogleFonts.manrope(
+                              fontSize: 12, color: timeFg)),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(body,
+                    style: GoogleFonts.manrope(
+                        fontSize: 13.5, color: fg, height: 1.5)),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    // Offered on warnings too, not just emergencies: the warning
+                    // copy itself ends with "worth checking in" / "worth making
+                    // sure they're okay", and calling is how the reader does that.
+                    //
+                    // The severity distinction moves to the button's weight rather
+                    // than its presence — solid red demands action now, outlined
+                    // offers it. Labelled for who is actually dialled: the contact
+                    // the installer registered, not the resident's own line.
+                    if (onCall != null)
+                      AppButton(
+                        variant: emergency
+                            ? AppButtonVariant.danger
+                            : AppButtonVariant.outline,
+                        buttonSize: AppButtonSize.sm,
+                        leading: const Icon(Icons.phone, size: 16),
+                        onPressed: onCall,
+                        child: const Text('Call emergency contact'),
+                      ),
+                    AppButton(
+                      variant: AppButtonVariant.ghost,
+                      buttonSize: AppButtonSize.sm,
+                      onPressed: onAcknowledge,
+                      child: const Text('Acknowledge'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // ── Sensor Card ────────────────────────────────────────────────

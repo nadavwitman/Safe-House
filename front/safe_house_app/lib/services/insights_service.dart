@@ -5,11 +5,14 @@ class InsightsService {
     return ApiClient.get('/api/insights/weekly/$houseId');
   }
 
-  static Future<Map<String, dynamic>> triggerWeeklyReport(
-      String houseId) async {
-    return ApiClient.post('/api/insights/weekly', {'house_id': houseId});
-  }
+  // The app has no way to make a report exist, and that is deliberate. Reports
+  // are written by the server's weekly job and by the catch-up that job's
+  // failures trigger; the customer app only ever reads them. Nothing a user taps
+  // can spend a Gemini call or move the EMA baseline the deltas measure against.
 
+  /// The last 7 days of alerts, newest first. The window is the server's and is not
+  /// adjustable. Each entry carries an `id` — the Firestore document id — which is
+  /// what acknowledgement is keyed on; see `AlertAckStore`.
   static Future<List<Map<String, dynamic>>> getAlerts(
     String houseId, {
     int? limit,

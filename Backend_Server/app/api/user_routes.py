@@ -28,6 +28,10 @@ def get_me():
                 'is_vacation': house.get('is_vacation', False),
                 'vacation_schedule': house.get('vacation_schedule'),
                 'sensor_mask': mask,
+                # Dialled by the home screen's Call button during an Emergency. This is
+                # the contact the installer registered for the house, not the resident's
+                # own line — the UI labels it accordingly.
+                'emergency_contact_phone': house.get('emergency_contact_phone'),
             })
 
     return jsonify({

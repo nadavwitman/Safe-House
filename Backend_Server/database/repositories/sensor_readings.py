@@ -83,14 +83,6 @@ def log_vector_reading(data, house_id='default_house', is_vacation=None):
     db.collection('houses').document(house_id).set(house_update, merge=True)
 
 
-def get_last_current_location(house_id='default_house'):
-    """Returns the last known current_location from the house document, or None."""
-    doc = db.collection('houses').document(house_id).get()
-    if doc.exists:
-        return doc.to_dict().get('last_current_location')
-    return None
-
-
 def get_recent_sensor_events(house_id, limit=50):
     """Returns the most recent sensor_vector readings for a house, newest first."""
     # where('time', '>=', cutoff) with a datetime value silently excludes any

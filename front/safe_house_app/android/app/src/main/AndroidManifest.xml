@@ -47,5 +47,12 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- Lets the emergency Call button on the home screen resolve a dialer.
+             Without this, Android 11+ package visibility hides every tel: handler and
+             url_launcher reports the number as unlaunchable. -->
+        <intent>
+            <action android:name="android.intent.action.DIAL"/>
+            <data android:scheme="tel"/>
+        </intent>
     </queries>
 </manifest>
