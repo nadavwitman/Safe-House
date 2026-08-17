@@ -6,7 +6,10 @@ import '../../services/admin_service.dart';
 import '../../services/api_client.dart';
 
 class AdminCreateScreen extends StatefulWidget {
-  const AdminCreateScreen({super.key});
+  /// Leaves this tab for House Search — where a house created here shows up,
+  /// and where its credentials can be looked up again.
+  final VoidCallback? onNavigateToSearch;
+  const AdminCreateScreen({super.key, this.onNavigateToSearch});
 
   @override
   State<AdminCreateScreen> createState() => _AdminCreateScreenState();
@@ -77,6 +80,23 @@ class _AdminCreateScreenState extends State<AdminCreateScreen> {
     });
   }
 
+  /// Finishing — as opposed to creating another — means leaving for the list,
+  /// where the house that was just made is now waiting.
+  void _done() {
+    _reset();
+    widget.onNavigateToSearch?.call();
+  }
+
+  /// Clears whatever has been typed as a side effect of leaving the screen.
+  /// Wiping the form in place would look like the button had misfired.
+  void _cancel() => _done();
+
+  /// Any edit means the admin is responding to the failure, so the banner has
+  /// done its job — leaving it up reads as though the form is still rejected.
+  void _clearApiError() {
+    if (_apiError != null) setState(() => _apiError = null);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -115,6 +135,7 @@ class _AdminCreateScreenState extends State<AdminCreateScreen> {
                         deviceToken:
                             _result!['device_token'] as String? ?? '',
                         onCreateAnother: _reset,
+                        onDone: _done,
                       )
                     : _buildForm(),
               ),
@@ -151,6 +172,7 @@ class _AdminCreateScreenState extends State<AdminCreateScreen> {
             error: _residentErr,
             onChanged: (v) {
               _resident = v;
+              _clearApiError();
               if (_residentErr != null) setState(() => _residentErr = null);
             },
           ),
@@ -160,7 +182,10 @@ class _AdminCreateScreenState extends State<AdminCreateScreen> {
             icon: const Icon(Icons.home_outlined),
             placeholder: 'Street, city, state',
             value: _address,
-            onChanged: (v) => _address = v,
+            onChanged: (v) {
+              _address = v;
+              _clearApiError();
+            },
           ),
           const SizedBox(height: 14),
           AppInput(
@@ -169,7 +194,10 @@ class _AdminCreateScreenState extends State<AdminCreateScreen> {
             placeholder: '+1 (___) ___-____',
             keyboardType: TextInputType.phone,
             value: _phone,
-            onChanged: (v) => _phone = v,
+            onChanged: (v) {
+              _phone = v;
+              _clearApiError();
+            },
           ),
           if (_apiError != null) ...[
             const SizedBox(height: 14),
@@ -197,7 +225,11 @@ class _AdminCreateScreenState extends State<AdminCreateScreen> {
             ),
           ],
           const SizedBox(height: 22),
-          Row(
+          // Wrap, not Row: at a large text scale these two buttons are wider
+          // than the card and a Row would overflow rather than reflow.
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
             children: [
               AppButton(
                 variant: AppButtonVariant.primary,
@@ -211,10 +243,9 @@ class _AdminCreateScreenState extends State<AdminCreateScreen> {
                 onPressed: _loading ? null : _submit,
                 child: Text(_loading ? 'Creating…' : 'Create house'),
               ),
-              const SizedBox(width: 10),
               AppButton(
                 variant: AppButtonVariant.ghost,
-                onPressed: _loading ? null : _reset,
+                onPressed: _loading ? null : _cancel,
                 child: const Text('Cancel'),
               ),
             ],
@@ -229,11 +260,13 @@ class _AdminCreateScreenState extends State<AdminCreateScreen> {
 class _SuccessView extends StatelessWidget {
   final String houseId, inviteCode, deviceToken;
   final VoidCallback onCreateAnother;
+  final VoidCallback onDone;
   const _SuccessView({
     required this.houseId,
     required this.inviteCode,
     required this.deviceToken,
     required this.onCreateAnother,
+    required this.onDone,
   });
 
   @override
@@ -293,8 +326,11 @@ class _SuccessView extends StatelessWidget {
             ),
             child: Column(
               children: [
+                // House ID and device token both get pasted into the unit's
+                // config.h, so the labels say so rather than calling the ID a
+                // mere reference and leaving the installer to guess.
                 CopyChip(
-                    label: 'House ID — admin reference',
+                    label: 'House ID — goes in the ESP32 config',
                     value: houseId,
                     mono: false),
                 const SizedBox(height: 12),
@@ -304,7 +340,7 @@ class _SuccessView extends StatelessWidget {
                     mono: false),
                 const SizedBox(height: 12),
                 CopyChip(
-                    label: 'Device token — program into the ESP32 unit',
+                    label: 'Device token — goes in the ESP32 config',
                     value: deviceToken),
               ],
             ),
@@ -326,7 +362,10 @@ class _SuccessView extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'The device token is shown only once. Copy it to a safe place before closing this screen.',
+                    'Copy the House ID and device token into the unit’s config, '
+                    'then power it on. The house stays Inactive until its first '
+                    'sensor reading arrives. You can look these credentials up '
+                    'again under House Search.',
                     style: GoogleFonts.manrope(
                         fontSize: 12.5,
                         color: const Color(0xFF7A5419),
@@ -338,14 +377,15 @@ class _SuccessView extends StatelessWidget {
           ),
           const SizedBox(height: 18),
 
-          Row(
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
             children: [
               AppButton(
                 variant: AppButtonVariant.primary,
-                onPressed: onCreateAnother,
+                onPressed: onDone,
                 child: const Text('Done'),
               ),
-              const SizedBox(width: 10),
               AppButton(
                 variant: AppButtonVariant.outline,
                 leading: const Icon(Icons.add, size: 16),

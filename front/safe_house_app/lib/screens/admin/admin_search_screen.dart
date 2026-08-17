@@ -29,7 +29,14 @@ enum _Mode { loading, list, loadingDetail, detail, listError }
 // ── Screen ───────────────────────────────────────────────────────
 class AdminSearchScreen extends StatefulWidget {
   final VoidCallback? onNavigateToCreate;
-  const AdminSearchScreen({super.key, this.onNavigateToCreate});
+  final ValueNotifier<int> activeTab;
+  final int tabIndex;
+  const AdminSearchScreen({
+    super.key,
+    required this.activeTab,
+    required this.tabIndex,
+    this.onNavigateToCreate,
+  });
 
   @override
   State<AdminSearchScreen> createState() => _AdminSearchScreenState();
@@ -48,7 +55,20 @@ class _AdminSearchScreenState extends State<AdminSearchScreen> {
   void initState() {
     super.initState();
     _controller.addListener(_onQueryChanged);
+    widget.activeTab.addListener(_onTabChanged);
     _loadList();
+  }
+
+  /// The shell keeps this screen alive in an IndexedStack, so coming back from
+  /// Create House never re-runs initState — a house made on the other tab would
+  /// stay missing from the list. Reload whenever the tab becomes visible, but
+  /// leave an open house detail alone; the admin is in the middle of something.
+  void _onTabChanged() {
+    if (widget.activeTab.value != widget.tabIndex) return;
+    if (_mode != _Mode.list && _mode != _Mode.listError) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadList();
+    });
   }
 
   Future<void> _loadList() async {
@@ -58,8 +78,11 @@ class _AdminSearchScreenState extends State<AdminSearchScreen> {
       if (mounted) {
         setState(() {
           _allHouses = houses;
-          _filtered = houses;
+          // Keep whatever is typed in the box applied, so a reload after a
+          // delete or a create never shows a list that contradicts the query.
+          _filtered = _matching(houses);
           _mode = _Mode.list;
+          _errorMsg = null;
         });
       }
     } catch (_) {
@@ -72,22 +95,19 @@ class _AdminSearchScreenState extends State<AdminSearchScreen> {
     }
   }
 
+  List<Map<String, dynamic>> _matching(List<Map<String, dynamic>> houses) {
+    final q = _controller.text.trim().toLowerCase();
+    if (q.isEmpty) return houses;
+    return houses.where((h) {
+      return (h['resident_name'] as String? ?? '').toLowerCase().contains(q) ||
+          (h['house_id'] as String? ?? '').toLowerCase().contains(q) ||
+          (h['address'] as String? ?? '').toLowerCase().contains(q);
+    }).toList();
+  }
+
   void _onQueryChanged() {
     if (_mode != _Mode.list) return;
-    final q = _controller.text.trim().toLowerCase();
-    setState(() {
-      _filtered = q.isEmpty
-          ? _allHouses
-          : _allHouses.where((h) {
-              return (h['resident_name'] as String? ?? '')
-                      .toLowerCase()
-                      .contains(q) ||
-                  (h['house_id'] as String? ?? '')
-                      .toLowerCase()
-                      .contains(q) ||
-                  (h['address'] as String? ?? '').toLowerCase().contains(q);
-            }).toList();
-    });
+    setState(() => _filtered = _matching(_allHouses));
   }
 
   Future<void> _selectHouse(String houseId) async {
@@ -137,6 +157,7 @@ class _AdminSearchScreenState extends State<AdminSearchScreen> {
 
   @override
   void dispose() {
+    widget.activeTab.removeListener(_onTabChanged);
     _controller.dispose();
     super.dispose();
   }
@@ -318,24 +339,45 @@ class _AdminSearchScreenState extends State<AdminSearchScreen> {
               ),
               const SizedBox(height: 6),
 
-              // Count / error inline
-              Padding(
-                padding: const EdgeInsets.only(left: 4, bottom: 10),
-                child: _errorMsg != null
-                    ? Text(_errorMsg!,
-                        style: GoogleFonts.manrope(
-                            fontSize: 12, color: const Color(0xFF7A3727)))
-                    : Text(
-                        _filtered.isEmpty
-                            ? 'No houses match'
-                            : '${_filtered.length} house${_filtered.length == 1 ? '' : 's'}',
-                        style: GoogleFonts.manrope(
-                            fontSize: 12, color: AppColors.ink500)),
-              ),
+              // Count / error inline. When the list is empty the card below
+              // says so in full, so a count here would only repeat it.
+              if (_errorMsg != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 4, bottom: 10),
+                  child: Text(_errorMsg!,
+                      style: GoogleFonts.manrope(
+                          fontSize: 12, color: const Color(0xFF7A3727))),
+                )
+              else if (_filtered.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(left: 4, bottom: 10),
+                  child: Text(
+                      '${_filtered.length} house${_filtered.length == 1 ? '' : 's'}',
+                      style: GoogleFonts.manrope(
+                          fontSize: 12, color: AppColors.ink500)),
+                )
+              else
+                const SizedBox(height: 4),
 
               // House list
-              if (_filtered.isEmpty && _allHouses.isNotEmpty)
-                _NoMatchCard(onCreateNew: widget.onNavigateToCreate)
+              if (_allHouses.isEmpty)
+                // A brand-new admin has nothing to search. Point at the only
+                // useful next step instead of leaving the screen bare.
+                _EmptyStateCard(
+                  icon: Icons.home_outlined,
+                  title: 'No houses yet',
+                  body: 'Create your first house to generate the invite code '
+                      'and device token for a new installation.',
+                  onCreateNew: widget.onNavigateToCreate,
+                )
+              else if (_filtered.isEmpty)
+                _EmptyStateCard(
+                  icon: Icons.search,
+                  title: 'No houses match',
+                  body:
+                      'Try a different name or address, or create a new house.',
+                  onCreateNew: widget.onNavigateToCreate,
+                )
               else
                 for (int i = 0; i < _filtered.length; i++) ...[
                   _HouseSummaryTile(
@@ -420,10 +462,18 @@ class _HouseSummaryTile extends StatelessWidget {
   }
 }
 
-// ── No-match card (filtered list is empty) ───────────────────────
-class _NoMatchCard extends StatelessWidget {
+// ── Empty state (nothing to search, or nothing matched) ──────────
+class _EmptyStateCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String body;
   final VoidCallback? onCreateNew;
-  const _NoMatchCard({this.onCreateNew});
+  const _EmptyStateCard({
+    required this.icon,
+    required this.title,
+    required this.body,
+    this.onCreateNew,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -439,17 +489,18 @@ class _NoMatchCard extends StatelessWidget {
               border: Border.all(color: AppColors.line2),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.search, size: 28, color: AppColors.ink500),
+            child: Icon(icon, size: 28, color: AppColors.ink500),
           ),
           const SizedBox(height: 14),
-          Text('No houses match',
+          Text(title,
+              textAlign: TextAlign.center,
               style: GoogleFonts.newsreader(
                   fontSize: 22,
                   color: AppColors.ink900,
                   fontWeight: FontWeight.w500)),
           const SizedBox(height: 8),
           Text(
-            'Try a different name or address, or create a new house.',
+            body,
             textAlign: TextAlign.center,
             style: GoogleFonts.manrope(
                 fontSize: 14, color: AppColors.ink600, height: 1.55),
@@ -508,13 +559,22 @@ class _FoundCardState extends State<_FoundCard> {
 
   String get _houseId => widget.house['house_id'] as String? ?? '';
 
-  void _showSnack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg, style: GoogleFonts.manrope(fontSize: 13)),
-      backgroundColor: AppColors.sage700,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    ));
+  void _showSnack(String msg, {bool error = false}) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(msg, style: GoogleFonts.manrope(fontSize: 13)),
+        backgroundColor: error ? AppColors.alert : AppColors.sage700,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ));
+  }
+
+  /// Every action here is a two-tap confirm on something destructive. Failing
+  /// quietly would leave the admin believing a token was rotated or a user
+  /// removed when nothing happened, so say so.
+  void _reportFailure(Object error, String fallback) {
+    _showSnack(error is ApiException ? error.message : fallback, error: true);
   }
 
   Future<void> _regenerate() async {
@@ -528,8 +588,11 @@ class _FoundCardState extends State<_FoundCard> {
         });
         _showSnack('Invite code regenerated');
       }
-    } catch (_) {
-      if (mounted) setState(() => _regenLoading = false);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _regenLoading = false);
+        _reportFailure(e, 'Could not regenerate the invite code.');
+      }
     }
   }
 
@@ -544,8 +607,11 @@ class _FoundCardState extends State<_FoundCard> {
         });
         _showSnack('Device token rotated');
       }
-    } catch (_) {
-      if (mounted) setState(() => _rotateLoading = false);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _rotateLoading = false);
+        _reportFailure(e, 'Could not rotate the device token.');
+      }
     }
   }
 
@@ -558,9 +624,13 @@ class _FoundCardState extends State<_FoundCard> {
           _users.removeWhere((u) => u['user_id'] == userId);
           _removingUsers.remove(userId);
         });
+        _showSnack('User removed from this house');
       }
-    } catch (_) {
-      if (mounted) setState(() => _removingUsers.remove(userId));
+    } catch (e) {
+      if (mounted) {
+        setState(() => _removingUsers.remove(userId));
+        _reportFailure(e, 'Could not remove that user.');
+      }
     }
   }
 
@@ -602,10 +672,10 @@ class _FoundCardState extends State<_FoundCard> {
     try {
       await AdminService.deleteHouse(_houseId);
       if (mounted) widget.onDeleted?.call();
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         setState(() => _deleteLoading = false);
-        _showSnack('Failed to delete house. Please try again.');
+        _reportFailure(e, 'Failed to delete house. Please try again.');
       }
     }
   }
@@ -622,8 +692,11 @@ class _FoundCardState extends State<_FoundCard> {
         });
         _showSnack('Sensor mask saved');
       }
-    } catch (_) {
-      if (mounted) setState(() => _maskSaving = false);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _maskSaving = false);
+        _reportFailure(e, 'Could not save the sensor mask.');
+      }
     }
   }
 
@@ -631,6 +704,7 @@ class _FoundCardState extends State<_FoundCard> {
   Widget build(BuildContext context) {
     final residentName = widget.house['resident_name'] as String? ?? '—';
     final address = widget.house['address'] as String?;
+    final isActive = widget.house['is_active'] as bool? ?? false;
 
     return AppCard(
       padding: EdgeInsets.zero,
@@ -676,10 +750,12 @@ class _FoundCardState extends State<_FoundCard> {
                   ),
                 ),
                 const SizedBox(width: 10),
+                // A house stays inactive until its ESP32 first reports in, so
+                // this has to read the flag — the list tile already does.
                 AppTag(
-                    label: 'Active',
-                    tone: 'sage',
-                    icon: StatusDot(tone: 'ok')),
+                    label: isActive ? 'Active' : 'Inactive',
+                    tone: isActive ? 'sage' : 'cream',
+                    icon: StatusDot(tone: isActive ? 'ok' : 'off')),
               ],
             ),
           ),

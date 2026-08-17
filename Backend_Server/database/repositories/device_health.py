@@ -32,6 +32,10 @@ def get_house_health_doc(house_id):
         'activated_at': data.get('activated_at'),
         'last_reading_at': data.get('last_reading_at'),
         'is_vacation': data.get('is_vacation', False),
+        # Used by check_device_connectivity, which is driven entirely off this
+        # single read — see app/monitoring/device_health.py.
+        'offline_alert_sent_at': data.get('offline_alert_sent_at'),
+        'resident_name': data.get('resident_name'),
     }
 
 
@@ -72,14 +76,9 @@ def log_sensor_fault_alert(house_id, sensor_index, sensor_name, hours_silent):
     })
 
 
-def get_offline_alert_sent_at(house_id):
-    """Returns the datetime an offline alert was last sent, or None."""
-    doc = db.collection('houses').document(house_id).get()
-    if doc.exists:
-        val = doc.to_dict().get('offline_alert_sent_at')
-        if isinstance(val, datetime):
-            return val
-    return None
+# There is no per-house getter for offline_alert_sent_at. check_device_connectivity
+# reads that field off the bulk house scan it already performs, so fetching it one
+# document at a time would add a read per house on every sweep.
 
 
 def set_offline_alert_sent_at(house_id, ts):

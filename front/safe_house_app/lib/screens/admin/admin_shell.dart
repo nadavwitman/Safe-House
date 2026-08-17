@@ -11,20 +11,38 @@ class AdminShell extends StatefulWidget {
 }
 
 class _AdminShellState extends State<AdminShell> {
-  int _index = 0;
+  // The tabs live in an IndexedStack, so each screen is built once and kept
+  // alive — initState never fires again on the way back. A screen that needs
+  // fresh data when it becomes visible listens to this instead.
+  final _activeTab = ValueNotifier<int>(0);
+
+  static const _searchTab = 0;
+  static const _createTab = 1;
+
+  late final _screens = <Widget>[
+    AdminSearchScreen(
+      activeTab: _activeTab,
+      tabIndex: _searchTab,
+      onNavigateToCreate: () => _goTo(_createTab),
+    ),
+    AdminCreateScreen(onNavigateToSearch: () => _goTo(_searchTab)),
+  ];
+
+  void _goTo(int i) => setState(() => _activeTab.value = i);
+
+  @override
+  void dispose() {
+    _activeTab.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final screens = [
-      AdminSearchScreen(onNavigateToCreate: () => setState(() => _index = 1)),
-      const AdminCreateScreen(),
-    ];
-
     return BottomNavShell(
-      currentIndex: _index,
-      onTap: (i) => setState(() => _index = i),
+      currentIndex: _activeTab.value,
+      onTap: _goTo,
       items: adminNavItems,
-      child: IndexedStack(index: _index, children: screens),
+      child: IndexedStack(index: _activeTab.value, children: _screens),
     );
   }
 }

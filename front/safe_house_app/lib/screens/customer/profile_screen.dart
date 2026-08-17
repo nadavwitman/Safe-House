@@ -5,42 +5,79 @@ import '../../widgets/shared_widgets.dart';
 import '../../services/auth_state.dart';
 import '../../services/auth_service.dart';
 import '../../services/config_service.dart';
+import '../../services/user_service.dart';
 import '../../services/api_client.dart';
 import '../auth/sign_in_screen.dart';
 
 // ── Helpers ──────────────────────────────────────────────────────
-String _formatDateTime(String? date, String? time) {
-  if (date == null) return '—';
-  final parts = date.split('-').map(int.parse).toList();
-  final dt = DateTime(parts[0], parts[1], parts[2]);
-  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  var s = '${days[dt.weekday - 1]}, ${months[dt.month - 1]} ${dt.day}';
-  if (time != null) {
-    final tp = time.split(':').map(int.parse).toList();
-    final h = tp[0]; final m = tp[1];
-    final ap = h >= 12 ? 'PM' : 'AM';
-    final h12 = h % 12 == 0 ? 12 : h % 12;
-    s += ' · $h12:${m.toString().padLeft(2, '0')} $ap';
+/// A schedule's endpoint as a local DateTime, or null if either half is missing
+/// or malformed. Every read of a stored schedule goes through here — the fields
+/// come back from Firestore and are not guaranteed to be well-formed strings,
+/// and an int.parse throwing inside build takes the whole screen down.
+DateTime? _parseLocalDT(Object? date, Object? time) {
+  if (date is! String || time is! String) return null;
+  final d = date.split('-');
+  final t = time.split(':');
+  if (d.length < 3 || t.length < 2) return null;
+  final y = int.tryParse(d[0]);
+  final mo = int.tryParse(d[1]);
+  final day = int.tryParse(d[2]);
+  final h = int.tryParse(t[0]);
+  final mi = int.tryParse(t[1]);
+  if (y == null || mo == null || day == null || h == null || mi == null) {
+    return null;
   }
-  return s;
+  return DateTime(y, mo, day, h, mi);
 }
 
-String _relDays(String? date) {
-  if (date == null) return '';
-  final parts = date.split('-').map(int.parse).toList();
-  final dt = DateTime(parts[0], parts[1], parts[2]);
+String _formatDateTime(Object? date, Object? time) {
+  final dt = _parseLocalDT(date, time);
+  if (dt == null) return '—';
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  final ap = dt.hour >= 12 ? 'PM' : 'AM';
+  final h12 = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+  return '${days[dt.weekday - 1]}, ${months[dt.month - 1]} ${dt.day}'
+      ' · $h12:${dt.minute.toString().padLeft(2, '0')} $ap';
+}
+
+String _relDays(Object? date, Object? time) {
+  final dt = _parseLocalDT(date, time);
+  if (dt == null) return '';
+  // Whole calendar days apart, not elapsed 24h periods: a trip starting at 08:00
+  // tomorrow is "tomorrow" whether it is now 22:00 or 09:00.
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
-  final diff = dt.difference(today).inDays;
+  final day = DateTime(dt.year, dt.month, dt.day);
+  final diff = day.difference(today).inDays;
   if (diff < 0) return '${-diff} day${-diff == 1 ? '' : 's'} ago';
   if (diff == 0) return 'today';
   if (diff == 1) return 'tomorrow';
   return 'in $diff days';
 }
 
+/// Whether the trip is under way right now. The server has already paused the
+/// house in this case (its scheduler does it within 5 minutes, and saving a
+/// schedule that covers now does it immediately), so the card presents it as
+/// something running rather than something to switch off by hand.
+bool _tripInProgress(Map<String, dynamic>? schedule) {
+  if (schedule == null) return false;
+  final start = _parseLocalDT(schedule['startDate'], schedule['startTime']);
+  final end = _parseLocalDT(schedule['endDate'], schedule['endTime']);
+  if (start == null || end == null) return false;
+  final now = DateTime.now();
+  return !now.isBefore(start) && !now.isAfter(end);
+}
+
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  /// The shell's current tab, and this screen's index in it. The tabs live in an
+  /// IndexedStack, so initState fires once and never again — this is how the
+  /// screen learns it has become visible and should re-read the account.
+  final ValueNotifier<int> activeTab;
+  final int tabIndex;
+
+  const ProfileScreen(
+      {super.key, required this.activeTab, required this.tabIndex});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -49,6 +86,68 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _vacationLoading = false;
   bool _scheduleLoading = false;
+  bool _refreshingProfile = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.activeTab.addListener(_onTabChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.activeTab.removeListener(_onTabChanged);
+    super.dispose();
+  }
+
+  void _onTabChanged() {
+    if (widget.activeTab.value != widget.tabIndex) return;
+    // The shell mutates the notifier inside its own setState, so this fires
+    // mid-build; defer or the refresh's setState lands during the parent's build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _refreshProfile();
+    });
+  }
+
+  /// Re-reads the account from the server. The houses list — and with it each
+  /// house's stored trip and pause state — otherwise stays exactly as it was at
+  /// sign-in, so a trip the server's scheduler ended, or one a second family
+  /// member planned, never showed up until the next cold start.
+  Future<void> _refreshProfile() async {
+    if (_refreshingProfile) return;
+    _refreshingProfile = true;
+    try {
+      await UserService.refresh();
+      if (mounted) setState(() {});
+    } catch (_) {
+      // Keep showing the cached account; this is a background freshening.
+    } finally {
+      _refreshingProfile = false;
+    }
+  }
+
+  /// Vacation calls change state the user is watching, so a failure has to say
+  /// so — silently reverting the toggle reads as the app ignoring the tap.
+  void _reportFailure(Object error, String fallback) {
+    if (!mounted) return;
+    final message = error is ApiException ? error.message : fallback;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// First name only — the copy reads "while Eleanor is away", and a full legal
+  /// name there sounds like a form field rather than a person.
+  String _activeResidentName(List<Map<String, dynamic>> houses, String activeId) {
+    if (houses.isEmpty) return 'the resident';
+    final house = houses.firstWhere(
+      (h) => h['house_id'] == activeId,
+      orElse: () => houses.first,
+    );
+    final full = (house['resident_name'] as String? ?? '').trim();
+    if (full.isEmpty) return 'the resident';
+    return full.split(RegExp(r'\s+')).first;
+  }
 
   String _initials(String username) {
     final parts = username.trim().split(RegExp(r'[\s_]+'));
@@ -64,9 +163,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (houseId == null) return;
     setState(() => _vacationLoading = true);
     try {
-      await ConfigService.setMode(houseId, on ? 'Vacation' : 'Normal');
-      await AuthState.instance.setVacationMode(on);
-    } catch (_) {}
+      final result =
+          await ConfigService.setMode(houseId, on ? 'Vacation' : 'Normal');
+      await AuthState.instance.setVacationMode(result.isVacation);
+      // Turning monitoring back on ends a trip already under way, and the server
+      // deletes that schedule. Without mirroring it here the card went on
+      // advertising a trip that no longer existed.
+      if (result.scheduleCleared) {
+        AuthState.instance.updateActiveHouseSchedule(null);
+      }
+    } catch (e) {
+      _reportFailure(e, 'Could not change vacation mode.');
+    }
     if (mounted) setState(() => _vacationLoading = false);
   }
 
@@ -75,9 +183,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (houseId == null) return;
     setState(() => _scheduleLoading = true);
     try {
-      await ConfigService.setSchedule(houseId, schedule);
+      final result = await ConfigService.setSchedule(houseId, schedule);
       AuthState.instance.updateActiveHouseSchedule(schedule);
-    } catch (_) {}
+      // A trip whose window already covers now pauses the house on the spot, so
+      // the toggle and the status strip have to move with it.
+      await AuthState.instance.setVacationMode(result.isVacation);
+    } catch (e) {
+      _reportFailure(e, 'Could not save the schedule.');
+    }
     if (mounted) setState(() => _scheduleLoading = false);
   }
 
@@ -86,9 +199,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (houseId == null) return;
     setState(() => _scheduleLoading = true);
     try {
-      await ConfigService.clearSchedule(houseId);
+      final result = await ConfigService.clearSchedule(houseId);
       AuthState.instance.updateActiveHouseSchedule(null);
-    } catch (_) {}
+      // Cancelling resumes monitoring server-side. Leaving the toggle On here
+      // told the user alerts were suppressed while they were in fact firing.
+      await AuthState.instance.setVacationMode(result.isVacation);
+    } catch (e) {
+      _reportFailure(e, 'Could not cancel the trip.');
+    }
     if (mounted) setState(() => _scheduleLoading = false);
   }
 
@@ -124,7 +242,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final user = auth.currentUser;
     final houses = user?.houses ?? [];
     final activeId = auth.activeHouseId ?? '';
-    final isVacation = auth.vacationMode;
 
     return Scaffold(
       backgroundColor: AppColors.bgCream,
@@ -262,15 +379,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       const SizedBox(height: 16),
                     ],
 
-                    // Vacation mode
-                    _VacationCard(
-                      on: isVacation,
-                      loading: _vacationLoading,
-                      scheduleLoading: _scheduleLoading,
-                      onChanged: _toggleVacation,
-                      schedule: AuthState.instance.vacationSchedule,
-                      onScheduleSave: _saveSchedule,
-                      onScheduleClear: _clearSchedule,
+                    // Vacation mode. Listened to rather than read once: the
+                    // server's scheduler can start a trip while this screen is
+                    // sitting alive but unbuilt in the shell's IndexedStack, and
+                    // the dashboard's poll is what notices.
+                    ValueListenableBuilder<bool>(
+                      valueListenable: auth.vacationMode,
+                      builder: (context, isVacation, _) => _VacationCard(
+                        on: isVacation,
+                        loading: _vacationLoading,
+                        scheduleLoading: _scheduleLoading,
+                        onChanged: _toggleVacation,
+                        schedule: auth.vacationSchedule,
+                        onScheduleSave: _saveSchedule,
+                        onScheduleClear: _clearSchedule,
+                        residentName: _activeResidentName(houses, activeId),
+                      ),
                     ),
                     const SizedBox(height: 16),
 
@@ -409,6 +533,7 @@ class _HouseSwitcherState extends State<_HouseSwitcher> {
               children: widget.houses.map((h) {
                 final houseId = h['house_id'] as String? ?? '';
                 final name = h['resident_name'] as String? ?? '—';
+                final address = h['address'] as String?;
                 final isActive = houseId == widget.activeId;
                 return GestureDetector(
                   onTap: () {
@@ -429,11 +554,25 @@ class _HouseSwitcherState extends State<_HouseSwitcher> {
                             child: Icon(Icons.home_outlined)),
                         const SizedBox(width: 11),
                         Expanded(
-                          child: Text(name,
-                              style: GoogleFonts.manrope(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.ink900)),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(name,
+                                  style: GoogleFonts.manrope(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.ink900)),
+                              // Tells two houses with similar resident names
+                              // apart. Absent on houses the installer set up
+                              // without one, so the row collapses to the name.
+                              if (address != null && address.isNotEmpty)
+                                Text(address,
+                                    style: GoogleFonts.manrope(
+                                        fontSize: 12, color: AppColors.ink500),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis),
+                            ],
+                          ),
                         ),
                         if (isActive)
                           const Icon(Icons.check,
@@ -460,6 +599,10 @@ class _VacationCard extends StatefulWidget {
   final ValueChanged<Map<String, dynamic>> onScheduleSave;
   final VoidCallback onScheduleClear;
 
+  /// Named in the copy, so the card reads "while Eleanor is away" rather than
+  /// describing the resident in the abstract.
+  final String residentName;
+
   const _VacationCard({
     required this.on,
     required this.loading,
@@ -468,18 +611,72 @@ class _VacationCard extends StatefulWidget {
     required this.schedule,
     required this.onScheduleSave,
     required this.onScheduleClear,
+    required this.residentName,
   });
 
   @override
   State<_VacationCard> createState() => _VacationCardState();
 }
 
+/// The four presentations of the card, in the order a trip moves through them.
+enum _VacationState { active, scheduled, paused, tripRunning }
+
 class _VacationCardState extends State<_VacationCard> {
   bool _editing = false;
 
   @override
   Widget build(BuildContext context) {
-    final paused = widget.on;
+    // A trip that has begun is not something the user switches off by hand —
+    // the server started it and will end it. Distinguishing it from a manual
+    // pause is what lets the card say "trip ends Sunday" instead of implying
+    // monitoring stays off until someone remembers to come back here.
+    final running = _tripInProgress(widget.schedule);
+    final paused = widget.on || running;
+    final state = !paused
+        ? (widget.schedule != null
+            ? _VacationState.scheduled
+            : _VacationState.active)
+        : (running ? _VacationState.tripRunning : _VacationState.paused);
+
+    final resident = widget.residentName;
+    final (tagLabel, bodyText) = switch (state) {
+      _VacationState.active => (
+          'Active',
+          'Pauses anomaly detection while $resident is away. Schedule a trip '
+              'ahead, or toggle on instantly.'
+        ),
+      _VacationState.scheduled => (
+          'Scheduled',
+          'Monitoring will pause automatically when the trip starts.'
+        ),
+      _VacationState.paused => (
+          'Paused',
+          'No alerts will fire until you turn this back off.'
+        ),
+      _VacationState.tripRunning => (
+          'Paused · scheduled',
+          'Vacation mode is paused as part of a scheduled trip. It will resume '
+              'automatically.'
+        ),
+    };
+
+    final (strongIcon, strongText) = switch (state) {
+      _VacationState.active => (Icons.shield_outlined, 'Monitoring active'),
+      _VacationState.scheduled => (
+          Icons.access_time,
+          'Monitoring active · scheduled trip ahead'
+        ),
+      _VacationState.paused => (
+          Icons.nightlight_round,
+          'Monitoring paused — vacation mode is on'
+        ),
+      _VacationState.tripRunning => (
+          Icons.nightlight_round,
+          'Monitoring paused — trip ends '
+              '${_formatDateTime(widget.schedule?['endDate'], widget.schedule?['endTime'])}'
+        ),
+    };
+
     final bg = paused
         ? const LinearGradient(
             begin: Alignment.topLeft,
@@ -534,21 +731,13 @@ class _VacationCardState extends State<_VacationCard> {
                             fontWeight: FontWeight.w500)),
                     const SizedBox(height: 4),
                     AppTag(
-                      label: paused
-                          ? 'On'
-                          : widget.schedule != null
-                              ? 'Scheduled'
-                              : 'Off',
+                      label: tagLabel,
                       tone: paused ? 'warn' : 'sage',
                       icon: StatusDot(tone: paused ? 'warn' : 'ok'),
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      paused
-                          ? 'No alerts will fire until you turn this back off.'
-                          : widget.schedule != null
-                              ? 'Monitoring will pause automatically when the trip starts.'
-                              : 'Pauses anomaly detection while the resident is away. Schedule a trip ahead, or toggle on instantly.',
+                      bodyText,
                       style: GoogleFonts.manrope(
                           fontSize: 13.5, color: bodyFg, height: 1.5),
                     ),
@@ -566,8 +755,12 @@ class _VacationCardState extends State<_VacationCard> {
                               child:
                                   CircularProgressIndicator(strokeWidth: 2))),
                     )
+                  // Disabled mid-trip: the pause belongs to the schedule, and
+                  // switching it off here would be undone by the server's next
+                  // sweep five minutes later. Cancelling the trip is the way out.
                   : AppToggle(
                       value: paused,
+                      disabled: state == _VacationState.tripRunning,
                       onChanged: widget.onChanged,
                       size: 'lg'),
             ],
@@ -588,18 +781,11 @@ class _VacationCardState extends State<_VacationCard> {
             ),
             child: Row(
               children: [
-                Icon(
-                    paused
-                        ? Icons.nightlight_round
-                        : Icons.shield_outlined,
-                    size: 16,
-                    color: bodyFg),
+                Icon(strongIcon, size: 16, color: bodyFg),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    paused
-                        ? 'Monitoring paused — vacation mode is on'
-                        : 'Monitoring active',
+                    strongText,
                     style: GoogleFonts.manrope(
                         fontSize: 13.5,
                         fontWeight: FontWeight.w600,
@@ -624,7 +810,11 @@ class _VacationCardState extends State<_VacationCard> {
               const SizedBox(width: 9),
               Expanded(
                 child: Text(
-                  widget.schedule != null ? 'Trip scheduled' : 'Schedule a trip ahead',
+                  widget.schedule == null
+                      ? 'Schedule a trip ahead'
+                      : state == _VacationState.tripRunning
+                          ? 'Trip in progress'
+                          : 'Trip scheduled',
                   style: GoogleFonts.manrope(
                       fontSize: 13.5, fontWeight: FontWeight.w700, color: fg),
                 ),
@@ -643,11 +833,19 @@ class _VacationCardState extends State<_VacationCard> {
                                 onPressed: () =>
                                     setState(() => _editing = true),
                                 child: const Text('Edit')),
+                            // Mid-trip this is the only way back to monitoring,
+                            // since the toggle is the schedule's to control —
+                            // named for what it does rather than "Cancel trip",
+                            // which sounds like undoing a plan that has not
+                            // happened yet.
                             AppButton(
                                 variant: AppButtonVariant.ghost,
                                 buttonSize: AppButtonSize.sm,
                                 onPressed: widget.onScheduleClear,
-                                child: const Text('Cancel trip')),
+                                child: Text(
+                                    state == _VacationState.tripRunning
+                                        ? 'End trip now'
+                                        : 'Cancel trip')),
                           ])
                         : AppButton(
                             variant: AppButtonVariant.soft,
@@ -694,7 +892,8 @@ class _VacationCardState extends State<_VacationCard> {
                               color: fg),
                         ),
                         Text(
-                          _relDays(widget.schedule!['startDate']),
+                          _relDays(widget.schedule!['startDate'],
+                              widget.schedule!['startTime']),
                           style:
                               GoogleFonts.manrope(fontSize: 11, color: bodyFg),
                         ),
@@ -723,7 +922,8 @@ class _VacationCardState extends State<_VacationCard> {
                           textAlign: TextAlign.end,
                         ),
                         Text(
-                          _relDays(widget.schedule!['endDate']),
+                          _relDays(widget.schedule!['endDate'],
+                              widget.schedule!['endTime']),
                           style:
                               GoogleFonts.manrope(fontSize: 11, color: bodyFg),
                           textAlign: TextAlign.end,
@@ -745,6 +945,31 @@ class _VacationCardState extends State<_VacationCard> {
                 widget.onScheduleSave(s);
                 setState(() => _editing = false);
               },
+            ),
+          ],
+
+          // A manual pause has nothing that will ever switch it off — worth
+          // saying, since the whole point of the card is that alerts are
+          // suppressed. A running trip ends itself, so it doesn't get this.
+          if (state == _VacationState.paused) ...[
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.info_outline,
+                    size: 13, color: Color(0xFF7A5419)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Toggle off as soon as $resident returns home, or schedule a '
+                    'trip to handle this automatically.',
+                    style: GoogleFonts.manrope(
+                        fontSize: 12,
+                        color: const Color(0xFF7A5419),
+                        height: 1.5),
+                  ),
+                ),
+              ],
             ),
           ],
 
@@ -784,27 +1009,19 @@ class _ScheduleEditorState extends State<_ScheduleEditor> {
   void initState() {
     super.initState();
     final init = widget.initial;
-    if (init != null) {
-      final sd = init['startDate'] as String?;
-      final st = init['startTime'] as String?;
-      final ed = init['endDate'] as String?;
-      final et = init['endTime'] as String?;
-      if (sd != null) {
-        final p = sd.split('-').map(int.parse).toList();
-        _startDate = DateTime(p[0], p[1], p[2]);
-      }
-      if (st != null) {
-        final p = st.split(':').map(int.parse).toList();
-        _startTime = TimeOfDay(hour: p[0], minute: p[1]);
-      }
-      if (ed != null) {
-        final p = ed.split('-').map(int.parse).toList();
-        _endDate = DateTime(p[0], p[1], p[2]);
-      }
-      if (et != null) {
-        final p = et.split(':').map(int.parse).toList();
-        _endTime = TimeOfDay(hour: p[0], minute: p[1]);
-      }
+    if (init == null) return;
+    // Shared parser rather than a bare int.parse per field: these come back from
+    // Firestore, and one malformed value used to throw out of initState and take
+    // the screen with it.
+    final start = _parseLocalDT(init['startDate'], init['startTime']);
+    if (start != null) {
+      _startDate = DateTime(start.year, start.month, start.day);
+      _startTime = TimeOfDay(hour: start.hour, minute: start.minute);
+    }
+    final end = _parseLocalDT(init['endDate'], init['endTime']);
+    if (end != null) {
+      _endDate = DateTime(end.year, end.month, end.day);
+      _endTime = TimeOfDay(hour: end.hour, minute: end.minute);
     }
   }
 
@@ -849,10 +1066,22 @@ class _ScheduleEditorState extends State<_ScheduleEditor> {
 
   Future<void> _pickDate(bool isStart) async {
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final current = isStart ? _startDate : _endDate;
+
+    // The end of a trip can't precede its start; the start of one can't precede
+    // today — except when it already has. A trip under way keeps a start date in
+    // the past for its whole duration (the server only deletes the schedule once
+    // the trip is over), and showDatePicker asserts that initialDate is not
+    // before firstDate. Editing a running trip therefore crashed outright, so
+    // the floor gives way to whatever the schedule already holds.
+    var firstDate = isStart ? today : (_startDate ?? today);
+    if (current != null && current.isBefore(firstDate)) firstDate = current;
+
     final picked = await showDatePicker(
       context: context,
-      initialDate: (isStart ? _startDate : _endDate) ?? now,
-      firstDate: now,
+      initialDate: current ?? (isStart ? today : (_startDate ?? today)),
+      firstDate: firstDate,
       lastDate: DateTime(now.year + 2),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
@@ -866,6 +1095,9 @@ class _ScheduleEditorState extends State<_ScheduleEditor> {
       setState(() {
         if (isStart) {
           _startDate = picked;
+          // Moving the start past the end leaves an impossible range the user
+          // then has to fix by hand; carry the end along instead.
+          if (_endDate != null && _endDate!.isBefore(picked)) _endDate = picked;
         } else {
           _endDate = picked;
         }
@@ -982,10 +1214,21 @@ class _ScheduleEditorState extends State<_ScheduleEditor> {
                 buttonSize: AppButtonSize.sm,
                 disabled: _startDate == null || _endDate == null || _invalid,
                 onPressed: () => widget.onSave({
+                  // What the user picked, and what gets rendered back to them.
                   'startDate': _dateStr(_startDate!),
                   'startTime': _timeStr(_startTime),
                   'endDate': _dateStr(_endDate!),
                   'endTime': _timeStr(_endTime),
+                  // The same two moments as absolute instants. The wall-clock
+                  // fields above carry no timezone, so the server was left
+                  // reading them against its own clock — a trip set for 09:00
+                  // began at noon for a UTC+3 family on a UTC host. Converting
+                  // here is what makes it exact: the device knows the zone, and
+                  // toUtc() on a local DateTime applies the offset in force on
+                  // that specific date, so a trip spanning a DST change still
+                  // starts and ends when the user said it would.
+                  'startUtc': _startDT()!.toUtc().toIso8601String(),
+                  'endUtc': _endDT()!.toUtc().toIso8601String(),
                 }),
                 child: const Text('Save schedule'),
               ),
@@ -1114,7 +1357,11 @@ class _CustomTimePickerDialogState extends State<_CustomTimePickerDialog> {
     final h = widget.initial.hour;
     _isAm = h < 12;
     _hour12 = h % 12 == 0 ? 12 : h % 12;
-    _minute = (widget.initial.minute / 5).round() * 5 % 60;
+    // The wheel only offers multiples of 5, so an off-grid minute has to snap to
+    // one. Rounding 58 up would wrap to 60, and the old `% 60` turned that into
+    // :00 of the *same* hour — silently moving the time an hour earlier. Floor
+    // instead: the value stays inside the hour the user chose.
+    _minute = (widget.initial.minute ~/ 5) * 5;
   }
 
   TimeOfDay get _result {
