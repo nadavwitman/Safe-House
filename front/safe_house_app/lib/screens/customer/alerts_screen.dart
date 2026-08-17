@@ -671,12 +671,11 @@ class _AlertItem extends StatelessWidget {
                       spacing: 6,
                       runSpacing: 6,
                       children: [
-                        // Call is on emergencies only. On a warning the useful
-                        // response is to keep watching; putting a phone button on
-                        // every card would train the family to ignore it.
-                        if (isEmergency && onCall != null)
+                        if (onCall != null)
                           AppButton(
-                            variant: AppButtonVariant.danger,
+                            variant: isEmergency
+                                ? AppButtonVariant.danger
+                                : AppButtonVariant.soft,
                             buttonSize: AppButtonSize.sm,
                             leading: const Icon(Icons.phone, size: 14),
                             onPressed: onCall,
@@ -851,7 +850,8 @@ class _AboutPanel extends StatelessWidget {
           label: 'Warning',
           description:
               "Non-critical anomalies — a routine that's slightly off, unusual "
-              'timing, or a missed event.',
+              'timing, or a missed event. A call button is offered here too, '
+              'in case you\'d rather check in directly.',
         ),
         const SizedBox(height: 10),
         const _TypeCard(
