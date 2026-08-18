@@ -679,7 +679,7 @@ class _AlertItem extends StatelessWidget {
                             buttonSize: AppButtonSize.sm,
                             leading: const Icon(Icons.phone, size: 14),
                             onPressed: onCall,
-                            child: const Text('Call emergency contact'),
+                            child: const Text('Call'),
                           ),
                         AppButton(
                           variant: isEmergency

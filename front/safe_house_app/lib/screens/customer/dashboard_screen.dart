@@ -845,7 +845,7 @@ class _AlertBanner extends StatelessWidget {
                         buttonSize: AppButtonSize.sm,
                         leading: const Icon(Icons.phone, size: 16),
                         onPressed: onCall,
-                        child: const Text('Call emergency contact'),
+                        child: const Text('Call'),
                       ),
                     AppButton(
                       variant: AppButtonVariant.ghost,

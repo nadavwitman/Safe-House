@@ -81,16 +81,7 @@ class _SignInScreenState extends State<SignInScreen> {
     return Scaffold(
       backgroundColor: AppColors.bgCream,
       body: Container(
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: const Alignment(-1, -1),
-            radius: 1.5,
-            colors: [
-              AppColors.sage500.withValues(alpha: 0.35),
-              Colors.transparent
-            ],
-          ),
-        ),
+        color: AppColors.bgCream,
         child: SafeArea(
           child: SingleChildScrollView(
             padding:

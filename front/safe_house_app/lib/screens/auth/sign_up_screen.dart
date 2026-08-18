@@ -70,16 +70,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     return Scaffold(
       backgroundColor: AppColors.bgCream,
       body: Container(
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: const Alignment(-1, -1),
-            radius: 1.4,
-            colors: [
-              AppColors.sage500.withValues(alpha: 0.30),
-              Colors.transparent
-            ],
-          ),
-        ),
+        color: AppColors.bgCream,
         child: SafeArea(
           child: SingleChildScrollView(
             padding:
