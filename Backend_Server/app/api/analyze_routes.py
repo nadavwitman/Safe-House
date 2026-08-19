@@ -164,7 +164,7 @@ def analyze_data():
             # --- ARTIFACT INTEGRATION: IN-MEMORY RAM CACHE LIFECYCLE ---
             # Check if the customized baseline model for this house is already loaded in RAM
             if house_id not in HOUSES_MODELS_CACHE:
-                print(f"[Cache Miss] Model for house {house_id} not found in RAM. Fetching from Firebase Storage...")
+                print(f"[Cache Miss] Model for house {house_id} not found in RAM. Loading from local disk...")
                 downloaded_model = download_model_from_firebase(house_id)
                 
                 if downloaded_model:

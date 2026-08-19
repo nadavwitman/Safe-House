@@ -60,7 +60,7 @@ def download_model_from_firebase(house_id):
 def auto_train_house_model(house_id):
     """
     Background worker that fetches data, delegates fine-tuning to the AI handler,
-    and uploads the newly blended model directly to Firebase Storage.
+    and persists the newly blended model to local disk.
 
     Returns True on a successful persisted retrain, False otherwise (including
     "correctly skipped" cases), so the caller can report real success/failure counts.
@@ -81,7 +81,7 @@ def auto_train_house_model(house_id):
         # 2. Fetch house mask
         house_mask = house_mask_store.get_mask(house_id)
 
-        # 3. Download the CURRENT custom model from Firebase (if it exists)
+        # 3. Load the CURRENT custom model from local disk (if it exists)
         current_model = download_model_from_firebase(house_id)
 
         # 4. Delegate to your advanced Continual Learning function
@@ -120,10 +120,10 @@ def auto_train_house_model(house_id):
         })
 
         # 8. Make the freshly trained model immediately available to inference on this
-        # process, instead of waiting for a blanket cache clear + Firebase re-download.
+        # process, instead of waiting for a blanket cache clear + disk re-load.
         HOUSES_MODELS_CACHE[house_id] = updated_model
 
-        print(f"[MLOps Worker] Cloud sync successful! {house_id} updated (Generation: {current_count + 1}).")
+        print(f"[MLOps Worker] Retrain successful! {house_id} updated (Generation: {current_count + 1}).")
         return True
 
     except Exception as e:

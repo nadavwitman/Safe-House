@@ -49,7 +49,7 @@ def scheduled_weekly_insights():
 
 def scheduled_fine_tuning_job():
     """Checks nightly and fine-tunes any house that's 14+ days overdue, persisting the
-    updated model to Firebase Storage (download current model → fine-tune → upload →
+    updated model to local disk (load current model → fine-tune → save →
     bump the fine-tune counter → refresh the RAM cache entry for that house)."""
     print("[03:00 AM] Starting automatic Weight Interpolation fine-tuning...")
     try:
