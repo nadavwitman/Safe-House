@@ -35,7 +35,7 @@ flowchart LR
     end
 
     MESP --> API
-    APP <--> DB
+    APP <--> API
     FCM --> APP
     API <--> DB
     

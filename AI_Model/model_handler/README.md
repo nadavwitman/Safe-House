@@ -1,6 +1,6 @@
 # model_handler
 
-Test-only counterpart to [Backend_Server/app/ai/model_manager.py](../../Backend_Server/app/ai/model_manager.py) (formerly `ai_handler.py`) for evaluating the **new** LSTM Autoencoder checkpoint — `best_safe_house_model.pth` (in [AI_Model/model/](../model/)).
+Production counterpart to [Backend_Server/app/ai/model_manager.py](../../Backend_Server/app/ai/model_manager.py) (formerly `ai_handler.py`), imported at runtime by [Backend_Server/app/ai/model_paths.py](../../Backend_Server/app/ai/model_paths.py) for evaluating the **new** LSTM Autoencoder checkpoint — `best_safe_house_model.pth` (in [AI_Model/model/](../model/)).
 
 Same architecture, same 6-hour (360-minute) input window, same feature layout as the original `AI_Model/tests/model_handler.py`. The difference is the checkpoint's training loss: an asymmetric weighted MSE on the `sensor_*` columns instead of plain `nn.MSELoss()` over all 18 columns (see notebooks in [AI_Model/training/](../training/)). That changes what the reconstructed `sensor_*` values mean — they now cross 0.5 around real events and can safely be thresholded into 0/1 counts, whereas on the old checkpoint they never exceeded ~0.14 and had to be summed as raw floats instead. `scoring.py` and `signal_utils.py` binarize accordingly; `sensor_config.py`'s tolerances are carried over from the old checkpoint's calibration and have not yet been re-validated against this one (see [__init__.py](__init__.py) docstring).
 

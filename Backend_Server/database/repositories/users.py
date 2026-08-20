@@ -26,17 +26,22 @@ def get_user_by_username(username):
 
 def create_user(user_id, username, email, password_hash, role='user'):
     now = datetime.now(timezone.utc)
-    db.collection('users').document(user_id).set({
+    user = {
         'user_id': user_id,
         'username': username,
         'email': email,
         'password_hash': password_hash,
         'role': role,
-        'house_ids': [],
-        'fcm_tokens': [],
         'created_at': now,
         'updated_at': now,
-    })
+    }
+    if role == 'user':
+        # Admins never join a house as a member (they're tracked via
+        # houses.admin_user_id instead) and never register for push alerts,
+        # so these fields would sit permanently empty for admin accounts.
+        user['house_ids'] = []
+        user['fcm_tokens'] = []
+    db.collection('users').document(user_id).set(user)
 
 
 def update_user(user_id, updates):

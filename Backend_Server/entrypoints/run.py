@@ -30,6 +30,18 @@ def scheduled_weekly_insights():
 
         for house_id in house_ids:
             try:
+                # A house currently on vacation (toggled on directly or via an
+                # active vacation_schedule window — both flip the same is_vacation
+                # flag, see database/repositories/vacation.py) has its vacation
+                # readings filtered out of get_weekly_sensor_data anyway, so
+                # generating now would either produce a thin, mostly-empty report
+                # or waste a Gemini call outright. Skip and let the lazy catch-up
+                # (which also checks is_vacation) generate the report once real
+                # data resumes.
+                if database.get_vacation_mode(house_id):
+                    print(f"[Scheduler] House {house_id} is currently in vacation mode. Skipping weekly insights.")
+                    continue
+
                 print(f"[Scheduler] Generating weekly insights for house: {house_id}")
                 # The only caller that may advance the EMA baseline — this runs
                 # once a week, which is the cadence the baseline assumes. The
