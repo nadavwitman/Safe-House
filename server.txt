@@ -3,8 +3,7 @@ Verified: every local import (app.*, database.*, entrypoints.*) resolves to a re
 Build context for `docker build` = repo root (Safe-House/), NOT Backend_Server/.
   -> Dockerfile path: Backend_Server/Dockerfile  (use -f Backend_Server/Dockerfile from repo root)
 
-Total: 56 files
-
+Total: 58 files
 
 == .dockerignore (repo root — controls what the build excludes) ==
 .dockerignore
@@ -39,11 +38,13 @@ Backend_Server/app/auth/__init__.py
 Backend_Server/app/auth/decorators.py
 Backend_Server/app/auth/utils.py
 Backend_Server/app/monitoring/device_health.py
+Backend_Server/app/scheduling/vacation_window.py
 Backend_Server/app/state/data_buffer.py
 Backend_Server/app/state/house_mask_store.py
 Backend_Server/app/weekly_summary/__init__.py
 Backend_Server/app/weekly_summary/aggregator.py
 Backend_Server/app/weekly_summary/baseline.py
+Backend_Server/app/weekly_summary/catchup.py
 Backend_Server/app/weekly_summary/constants.py
 Backend_Server/app/weekly_summary/metrics/__init__.py
 Backend_Server/app/weekly_summary/metrics/cognitive.py
@@ -147,6 +148,23 @@ Current production image: safe-house-image:latest
 - Every `from app.X import ...` / `import app.X` / `from database.X import ...` / `from entrypoints.X import ...`
   statement in the codebase was checked against the file list above — all resolve.
 - No leftover references to the old pre-reorg paths (app.core.*, bare `database.py` imports, etc.) were found.
-- app/ai, app/alerts, app/monitoring, app/state have no __init__.py (unlike app/api, app/auth, app/weekly_summary).
-  This still works — Python 3 treats them as implicit namespace packages — but it's inconsistent with the rest
-  of app/. Not a blocker; flagging for optional cleanup.
+- app/ai, app/alerts, app/monitoring, app/scheduling, app/state have no __init__.py (unlike app/api, app/auth,
+  app/weekly_summary). This still works — Python 3 treats them as implicit namespace packages — but it's
+  inconsistent with the rest of app/. Not a blocker; flagging for optional cleanup.
+
+== Re-verified 2026-08-20 — two files were missing from this manifest ==
+- Backend_Server/app/scheduling/vacation_window.py — imported by app/__init__.py (scheduler wiring),
+  entrypoints/run.py (dev-only, not shipped), and app/api/config_routes.py. Without it the app fails at
+  import time. (app/scheduling/jobs.py does NOT exist despite a leftover jobs.cpython-312.pyc in
+  __pycache__ — that .pyc is stale and excluded by .dockerignore anyway; no source file to ship.)
+- Backend_Server/app/weekly_summary/catchup.py — imported by app/api/house_routes.py
+  (`from app.weekly_summary.catchup import maybe_catch_up`). Same failure mode.
+Both are now included in the file list above (58 files total, was 56).
+
+Also note: Dockerfile does `COPY Backend_Server/app/ app/` etc. — it copies whole directories, not a
+file-by-file list, so a local `docker build` from this repo would NOT have hit these two gaps. They only
+matter if syncing an explicit file list to the server (e.g. `rsync --files-from`) instead of the full
+directories. If deploying via rsync of the whole Backend_Server/ + AI_Model/ dirs (excluding tests/,
+scripts/, venv/, __pycache__/, and the README.md files sprinkled through the tree), this whole file list
+is moot — just make sure the same excludes as .dockerignore are applied so secrets and dev-only content
+don't get copied to the server unnecessarily (they're already excluded from the image itself either way).
