@@ -117,14 +117,23 @@ def get_recent_sensor_events(house_id, limit=50):
 
 def get_weekly_sensor_data(house_id='default_house'):
     """
-    Returns all sensor vector readings from the past 7 days for the given house.
-    Optimized to query filtered subsets from Firestore instead of heavy streaming.
+    Returns all non-vacation sensor vector readings from the past 7 days for the
+    given house. Optimized to query filtered subsets from Firestore instead of
+    heavy streaming.
+
+    Vacation-flagged readings are excluded server-side, the same way
+    fetch_finetuning_data excludes them from the fine-tuning window: a resident
+    away from home shouldn't have that silence averaged into their wellness
+    metrics or dragged into the EMA baseline as if it were a real routine
+    change. A week that straddles a vacation (partway through a trip, or back
+    partway through the week) is reported on its remaining real days rather
+    than being skipped outright.
     """
     cutoff = datetime.now(timezone.utc) - timedelta(days=7)
     vectors_ref = db.collection('houses').document(house_id).collection('sensor_vectors')
 
     # Query only the required 7 days from the server side
-    docs = vectors_ref.where('time', '>=', cutoff).get()
+    docs = vectors_ref.where('time', '>=', cutoff).where('is_vacation', '==', False).get()
     results = []
 
     for doc in docs:

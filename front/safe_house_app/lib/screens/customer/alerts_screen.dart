@@ -882,6 +882,16 @@ class _AboutPanel extends StatelessWidget {
               'from Unread. It stays in the list as history, and it does not '
               "change the house's status — only the system can clear that.",
         ),
+        const SizedBox(height: 10),
+        const _TypeCard(
+          icon: Icons.phone,
+          tone: 'coral',
+          label: 'Call button',
+          description:
+              "Dials the house's emergency contact directly from the alert card. "
+              "It only appears when an emergency contact number is on file for "
+              "the house, and only until the alert is acknowledged.",
+        ),
         const SizedBox(height: 18),
         Container(
           padding: const EdgeInsets.all(16),

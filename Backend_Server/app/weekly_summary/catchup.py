@@ -44,7 +44,7 @@ STALE_AFTER = timedelta(days=8)
 RETRY_AFTER = timedelta(hours=24)
 
 
-def maybe_catch_up(house_id, weekly_report_at, catchup_attempted_at):
+def maybe_catch_up(house_id, weekly_report_at, catchup_attempted_at, is_vacation=False):
     """Starts a background regeneration if this house is overdue for one.
 
     Both timestamps come from the caller's existing read of the house document;
@@ -56,7 +56,18 @@ def maybe_catch_up(house_id, weekly_report_at, catchup_attempted_at):
     first report failed to land, and as a side effect gives a newly installed
     house its first summary as soon as it has five days of activity rather than
     at the next Sunday.
+
+    is_vacation also comes from the caller's existing read (house_routes.py's
+    dashboard poll already fetches it). A house currently away has its vacation
+    readings filtered out of get_weekly_sensor_data anyway (see
+    database/repositories/sensor_readings.py), so regenerating now would just
+    burn a Gemini call on a thin or empty week — and would stamp
+    catchup_attempted_at, backing off the real regeneration by RETRY_AFTER once
+    the resident is back. Skip here and let the next poll after vacation ends
+    (still overdue, no attempt recorded) trigger it instead.
     """
+    if is_vacation:
+        return
     try:
         now = datetime.now(timezone.utc)
         if not _is_due(weekly_report_at, catchup_attempted_at, now):

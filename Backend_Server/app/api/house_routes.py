@@ -27,7 +27,7 @@ def get_house_status(house_id):
     # Sunday job never produced one, this notices and regenerates in the
     # background. Returns immediately, and costs nothing when the report is
     # current — both timestamps it needs came from the read above.
-    maybe_catch_up(house_id, meta['weekly_report_at'], meta['catchup_attempted_at'])
+    maybe_catch_up(house_id, meta['weekly_report_at'], meta['catchup_attempted_at'], meta['is_vacation'])
 
     return jsonify({
         'is_vacation': meta['is_vacation'],

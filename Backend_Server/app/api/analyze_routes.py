@@ -153,18 +153,28 @@ def analyze_data():
         # Aquire all current buffer data for processing
         buffer_data = sensor_buffer.get_all_readings(house_id)
 
+        # Vacation mode (toggled on directly or via an active vacation_schedule window —
+        # both flip the same is_vacation flag, see database/repositories/vacation.py)
+        # skips inference and alerting outright. This used to be implicit: starting
+        # vacation pauses and clears the buffer, so has_enough_data() below would stay
+        # False and inference just never ran. That relied on a side effect and left a
+        # gap right at the vacation boundary — a buffer that was already full when
+        # vacation started would still get evaluated on the very next reading, before
+        # the pause took hold. Checking is_vacation directly here closes that gap.
+        if is_vacation:
+            print(f"[AI] House {house_id} is on vacation — skipping inference.")
         # Only run the model once we hold a full 6-hour window (360 minutes). The model was
         # trained on fixed 360-length sequences and the anomaly score is calibrated on that
         # window — a partial buffer yields an out-of-distribution, unreliable score. Warm-start
         # above ensures an established house reaches this threshold right after a restart; only a
         # genuinely new install (<6h of history) waits for the window to fill.
-        if sensor_buffer.has_enough_data(house_id):
+        elif sensor_buffer.has_enough_data(house_id):
             house_mask = house_mask_store.get_mask(house_id)
 
             # --- ARTIFACT INTEGRATION: IN-MEMORY RAM CACHE LIFECYCLE ---
             # Check if the customized baseline model for this house is already loaded in RAM
             if house_id not in HOUSES_MODELS_CACHE:
-                print(f"[Cache Miss] Model for house {house_id} not found in RAM. Fetching from Firebase Storage...")
+                print(f"[Cache Miss] Model for house {house_id} not found in RAM. Loading from local disk...")
                 downloaded_model = download_model_from_firebase(house_id)
                 
                 if downloaded_model:
