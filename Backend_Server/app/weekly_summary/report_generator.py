@@ -2,6 +2,7 @@ import json
 import os
 import time
 from datetime import date as _date
+from datetime import datetime, timedelta, timezone
 
 from firebase_admin import firestore
 from google import genai
@@ -184,6 +185,29 @@ def generate_weekly_report(compact_prompt):
 # Pipeline orchestrator
 # ---------------------------------------------------------------------------
 
+# Matches the weekly scheduler's CronTrigger(day_of_week='sun', hour=6) — both
+# read the same fixed calendar week off the wall clock the container runs in
+# (UTC on this deployment), so the report a house gets never depends on
+# whether it came from the Sunday job or a later catch-up.
+WEEK_BOUNDARY_HOUR = 6
+
+
+def get_last_complete_week(now=None):
+    """Returns (start, end) — the most recently completed Sunday 06:00 to
+    Sunday 06:00 window as of `now`. `end` is exclusive.
+
+    Deterministic in `now`, so the Sunday job and a catch-up firing mid-week
+    always agree on which week they're generating for.
+    """
+    now = now or datetime.now(timezone.utc)
+    days_since_sunday = (now.weekday() + 1) % 7  # Python: Monday=0 ... Sunday=6
+    end = (now - timedelta(days=days_since_sunday)).replace(
+        hour=WEEK_BOUNDARY_HOUR, minute=0, second=0, microsecond=0)
+    if end > now:
+        end -= timedelta(days=7)
+    return end - timedelta(days=7), end
+
+
 def run_insights_pipeline(house_id, raw_docs, advance_baseline=True):
     """
     Full pipeline: load mask → load baseline → aggregate → compute deltas
@@ -191,10 +215,11 @@ def run_insights_pipeline(house_id, raw_docs, advance_baseline=True):
 
     advance_baseline decides whether this run moves the EMA baseline forward. The
     baseline is the reference every week-over-week delta is measured against, and
-    each update pulls it 5% toward the week just measured — so only the scheduled
-    weekly run may advance it. An on-demand or repeated run must pass False, or
-    re-running it a few times would drag the baseline toward the current week and
-    quietly flatten the very deltas the report is reporting.
+    each update pulls it 5% toward the week just measured. generate_and_store
+    always advances it — its callers only ever target a distinct, not-yet-reported
+    calendar week (see get_last_complete_week) — but re-running this directly on
+    the same week's data must pass False, or repeating it would drag the baseline
+    toward that week twice and quietly flatten the very deltas being reported.
 
     Saving the report is the caller's job: it owns the period and generated_at
     that wrap this output into the stored document.
@@ -231,7 +256,7 @@ def run_insights_pipeline(house_id, raw_docs, advance_baseline=True):
     return metrics, ai_output
 
 
-def generate_and_store(house_id, advance_baseline):
+def generate_and_store(house_id):
     """Runs the pipeline for one house and persists the result.
 
     Returns (status, report) where status is 'success', 'no_data' or
@@ -241,13 +266,18 @@ def generate_and_store(house_id, advance_baseline):
     Every producer goes through here — the weekly scheduler, the lazy catch-up
     and the ops endpoint — so the shape of a stored report, and the fact that
     period and generated_at wrap the pipeline's output, is defined once.
+
+    Both the Sunday job and a catch-up always target the same fixed calendar
+    week (get_last_complete_week), so a catch-up genuinely fills in the week
+    that was missed rather than an arbitrary trailing window — safe to always
+    advance the baseline, unlike an on-demand re-run of the same week.
     """
-    raw_docs = database.get_weekly_sensor_data(house_id)
+    start, end = get_last_complete_week()
+    raw_docs = database.get_weekly_sensor_data(house_id, start, end)
     if not raw_docs:
         return 'no_data', None
 
-    metrics, ai_output = run_insights_pipeline(
-        house_id, raw_docs, advance_baseline=advance_baseline)
+    metrics, ai_output = run_insights_pipeline(house_id, raw_docs)
     if metrics is None:
         return 'insufficient_data', None
 

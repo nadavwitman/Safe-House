@@ -43,10 +43,7 @@ def scheduled_weekly_insights():
                     continue
 
                 print(f"[Scheduler] Generating weekly insights for house: {house_id}")
-                # The only caller that may advance the EMA baseline — this runs
-                # once a week, which is the cadence the baseline assumes. The
-                # lazy catch-up deliberately does not.
-                status, _ = generate_and_store(house_id, advance_baseline=True)
+                status, _ = generate_and_store(house_id)
                 if status == 'success':
                     print(f"[Scheduler] Report saved for house: {house_id}")
                 else:

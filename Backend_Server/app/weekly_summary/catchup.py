@@ -19,12 +19,12 @@ Two properties keep it off the hot path:
   * The claim is transactional, so several family members polling at once
     produce one regeneration rather than one each.
 
-Deliberately, a catch-up never advances the EMA baseline. Only the weekly job
-does, because the baseline assumes exactly one update per week and a catch-up
-runs at an arbitrary moment. The cost is that a rescued week's numbers never
-enter the long-run average; the alternative — double-counting a week, or
-counting one twice because two workers raced — distorts every delta the report
-shows for the next several months.
+A catch-up now targets the same fixed calendar week the Sunday job would have
+(report_generator.get_last_complete_week), so it genuinely fills in the missed
+week rather than an arbitrary trailing window, and it advances the EMA
+baseline exactly like the Sunday job would have. The transactional claim below
+is what keeps two racing pollers from generating (and baseline-advancing) the
+same week twice.
 """
 
 import threading
@@ -138,7 +138,7 @@ def _regenerate(house_id):
     the new report through the same generated_at signal it uses for everything
     else, within one poll of it being written."""
     try:
-        status, _ = generate_and_store(house_id, advance_baseline=False)
+        status, _ = generate_and_store(house_id)
         if status == 'success':
             print(f"[Catchup] Regenerated overdue report for house {house_id}")
         else:

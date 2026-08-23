@@ -115,11 +115,14 @@ def get_recent_sensor_events(house_id, limit=50):
     return results
 
 
-def get_weekly_sensor_data(house_id='default_house'):
+def get_weekly_sensor_data(house_id='default_house', start=None, end=None):
     """
-    Returns all non-vacation sensor vector readings from the past 7 days for the
-    given house. Optimized to query filtered subsets from Firestore instead of
-    heavy streaming.
+    Returns non-vacation sensor vector readings for the given house within
+    [start, end). Defaults to the trailing 7 days from now when no explicit
+    window is given (used by tests / ad-hoc callers); production report
+    generation always passes the fixed calendar week from
+    report_generator.get_last_complete_week, so the Sunday job and a later
+    catch-up agree on exactly which week they're generating.
 
     Vacation-flagged readings are excluded server-side, the same way
     fetch_finetuning_data excludes them from the fine-tuning window: a resident
@@ -129,11 +132,19 @@ def get_weekly_sensor_data(house_id='default_house'):
     partway through the week) is reported on its remaining real days rather
     than being skipped outright.
     """
-    cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+    if end is None:
+        end = datetime.now(timezone.utc)
+    if start is None:
+        start = end - timedelta(days=7)
     vectors_ref = db.collection('houses').document(house_id).collection('sensor_vectors')
 
-    # Query only the required 7 days from the server side
-    docs = vectors_ref.where('time', '>=', cutoff).where('is_vacation', '==', False).get()
+    docs = (
+        vectors_ref
+        .where('time', '>=', start)
+        .where('time', '<', end)
+        .where('is_vacation', '==', False)
+        .get()
+    )
     results = []
 
     for doc in docs:
