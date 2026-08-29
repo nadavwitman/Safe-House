@@ -343,7 +343,7 @@ def summarize(df, day_stats, days):
 
 
 if __name__ == "__main__":
-    DAYS = 365
+    DAYS = 30
     df, day_stats = generate_month(PROFILE, days=DAYS, seed=42)
 
     data_path = os.path.join(OUT_DIR, "mock_data_month.csv")

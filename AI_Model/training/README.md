@@ -4,7 +4,7 @@ Colab notebooks that train the weighted-loss LSTM Autoencoder checkpoint consume
 
 ## Why this exists
 
-Plain `nn.MSELoss()` over all 18 columns (the original training approach, still used by the production checkpoint behind [Backend_Server/app/ai/model_manager.py](../../Backend_Server/app/ai/model_manager.py)) collapses the sparse `sensor_*` columns (0.14%–1.06% positive per channel) to near-zero reconstruction — the model just learns "always predict near-0" since that minimizes loss on such an imbalanced signal. That makes it useless to threshold sensor reconstructions into event predictions. These notebooks fix that by scaling the squared error on positive sensor targets by `POSITIVE_WEIGHT` (asymmetric weighted MSE), so the model is forced to actually learn per-channel event timing instead of a constant.
+Plain `nn.MSELoss()` over all 18 columns (the original training approach, since replaced — the checkpoint the backend actually loads via [Backend_Server/app/ai/model_paths.py](../../Backend_Server/app/ai/model_paths.py) is the weighted one produced by these notebooks) collapses the sparse `sensor_*` columns (0.14%–1.06% positive per channel) to near-zero reconstruction — the model just learns "always predict near-0" since that minimizes loss on such an imbalanced signal. That makes it useless to threshold sensor reconstructions into event predictions. These notebooks fix that by scaling the squared error on positive sensor targets by `POSITIVE_WEIGHT` (asymmetric weighted MSE), so the model is forced to actually learn per-channel event timing instead of a constant.
 
 ## Files
 
