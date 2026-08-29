@@ -9,7 +9,7 @@
 // master trusts whatever index arrives, so two boards flashed with the same value
 // are indistinguishable. Confirm the boot banner on each board after flashing:
 //   === Safe-House Servant — Sensor <n> on GPIO<p> ===
-#define SENSOR_INDEX 1 // <-- change per board
+#define SENSOR_INDEX "<CURRRENT_SENSOR_INDEX>" // <-- change per board
 
 // ─── GPIO pin the PIR signal wire is connected to ────────────────────────────
 #define SENSOR_PIN 14 // PIR signal wire on GPIO 14
@@ -26,8 +26,8 @@
 // esp_wifi_set_channel() rejected it and the board never reached the master).
 // Read the real value from the master's boot line:
 //   [ESP-NOW] Master WiFi channel: <n>
-#define WIFI_CHANNEL 1
-#define ROUTER_SSID "Yael"
+#define WIFI_CHANNEL "<WIFI_CHANNEL_NUMBER>"
+#define ROUTER_SSID "<SSID_NAME>"
 
 // How many times to look for ROUTER_SSID before giving up and using WIFI_CHANNEL.
 #define CHANNEL_SCAN_ATTEMPTS 3

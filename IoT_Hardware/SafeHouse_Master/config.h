@@ -1,13 +1,13 @@
 #pragma once
 
 // ─── WiFi ────────────────────────────────────────────────────────────────────
-#define WIFI_SSID "Yael"
-#define WIFI_PASSWORD "0544219013"
+#define WIFI_SSID "<SSID_NAME>"
+#define WIFI_PASSWORD "<WIFI_PASSWORD>"
 
 // ─── Server ──────────────────────────────────────────────────────────────────
-#define SERVER_URL "http://16.164.45.100:5000/api/analyze"
-#define DEVICE_TOKEN "a10fb638b677d5f42470cfec2350002218ee348ed1d587e58d6bf6ded49011d9"
-#define HOUSE_ID "412ede6a-7810-496d-a223-49a6b8514011"
+#define SERVER_URL "<SERVER_URL>"
+#define DEVICE_TOKEN "<DEVICE_TOKEN>"
+#define HOUSE_ID "<HOUSE_ID>"
 
 // ─── Timezone ────────────────────────────────────────────────────────────────
 // Affects the serial log ONLY. The timestamp in the POST body is always true UTC
