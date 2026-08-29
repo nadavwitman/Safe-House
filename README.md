@@ -81,11 +81,11 @@ The order below is fixed everywhere — the ESP32's `sensor_vector`, the model's
 
 | # | Zone | Typical sensor |
 |---|---|---|
-| 0 | Door | Reed switch |
+| 0 | Door | PIR |
 | 1 | Kitchen | PIR |
 | 2 | Bathroom | PIR |
 | 3 | Toilet | PIR |
-| 4 | Medications | Reed switch |
+| 4 | Medications | PIR |
 | 5 | Bedroom | PIR |
 | 6 | Living Room | PIR |
 
