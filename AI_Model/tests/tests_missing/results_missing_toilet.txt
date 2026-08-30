@@ -94,10 +94,10 @@ Rolling 360-minute window, 1-minute step: routine before/after the anomaly, and 
 20:40        880  Normal      -                 -             0.0000  0.0000
 20:50        890  Normal      -                 -             0.0000  0.0000
 21:00        900  Normal      -                 -             0.0000  0.0000
-21:04        904  Warning     Missing Usage     Toilet        0.9375  0.9375
-21:08        908  Normal      -                 -             0.0000  0.6000
+21:04        904  Warning     Missing Usage     Toilet        0.7500  0.7500
+21:07        907  Normal      -                 -             0.0000  0.5455
 21:10        910  Normal      -                 -             0.0000  0.0000
-21:14        914  Warning     Missing Usage     Toilet        0.7500  0.7500
+21:16        916  Warning     Missing Usage     Toilet        0.7143  0.7143
 21:20        920  Normal      -                 -             0.0000  0.0000
 21:30        930  Normal      -                 -             0.0000  0.0000
 21:40        940  Normal      -                 -             0.0000  0.0000

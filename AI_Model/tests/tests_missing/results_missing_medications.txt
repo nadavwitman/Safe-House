@@ -29,15 +29,14 @@ Rolling 360-minute window, 1-minute step: routine before/after the anomaly, and 
 09:50        230  Normal      -                 -             0.0000  0.0000
 10:00        240  Normal      -                 -             0.0000  0.0000
 10:10        250  Normal      -                 -             0.0000  0.0000
-10:11        251  Warning     Missing Usage     Medications   0.9091  0.9091
-10:20        260  Warning     Missing Usage     Medications   0.9901  0.9901
-10:30        270  Warning     Missing Usage     Medications   0.9934  0.9934
-10:40        280  Warning     Missing Usage     Medications   0.9966  0.9966
-10:50        290  Warning     Missing Usage     Medications   0.9967  0.9967
-11:00        300  Warning     Missing Usage     Medications   0.9963  0.9963
-11:10        310  Warning     Missing Usage     Medications   0.9938  0.9938
-11:20        320  Warning     Missing Usage     Medications   0.9804  0.9804
-11:24        324  Normal      -                 -             0.0000  0.0000
+10:16        256  Warning     Missing Usage     Medications   0.6667  0.6667
+10:20        260  Warning     Missing Usage     Medications   0.7692  0.7692
+10:30        270  Warning     Missing Usage     Medications   0.8333  0.8333
+10:40        280  Warning     Missing Usage     Medications   0.9062  0.9062
+10:50        290  Warning     Missing Usage     Medications   0.9091  0.9091
+11:00        300  Warning     Missing Usage     Medications   0.9000  0.9000
+11:10        310  Warning     Missing Usage     Medications   0.8421  0.8421
+11:20        320  Normal      -                 -             0.0000  0.6250
 11:30        330  Normal      -                 -             0.0000  0.0000
 11:40        340  Normal      -                 -             0.0000  0.0000
 11:50        350  Normal      -                 -             0.0000  0.0000

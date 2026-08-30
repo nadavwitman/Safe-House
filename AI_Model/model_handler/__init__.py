@@ -24,12 +24,13 @@ Sigmoid over all 18 outputs (no separate softmax head), so location scoring stil
 resolves the "current location" via argmax over the raw (non-binarized) location
 floats, exactly as before.
 
-NOTE: sensor_config.DEFAULT_SENSOR_CONFIG carries over the tolerances calibrated
-against the OLD checkpoint's float-sum units unchanged. They are the right order of
-magnitude (both old and new "expected_count" are still small integers/near-integers
-per band), but they have not been re-validated against this checkpoint's binary
-counts by running tests_static/tests_missing/tests_frequency equivalents against it.
-Retune from that output before relying on absolute severity numbers from this model.
+NOTE: sensor_config.DEFAULT_SENSOR_CONFIG's missing_tolerance and frequency_tolerance
+values were retuned against this checkpoint's binary counts (expected_count capped at
+WARNING_WINDOW; excess rising-edge counts scale much higher, into the tens over a full
+anomaly) by running the tests_missing/tests_frequency scenarios and checking where the
+Normal->Warning sweep lands. Same-unit counting alone (rising edges on both sides for
+frequency) wasn't enough -- the old tolerance magnitudes were still calibrated for the
+old checkpoint's much smaller counts and saturated almost immediately.
 
 Module layout:
   architecture.py    Encoder/Decoder/LSTMAnomalyDetector, load_model

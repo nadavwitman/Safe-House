@@ -24,12 +24,12 @@ Rolling 360-minute window, 1-minute step: routine before/after the anomaly, and 
 09:00        180  Normal      -                 -             0.0000  0.0000
 09:10        190  Normal      -                 -             0.0000  0.0000
 09:20        200  Normal      -                 -             0.0000  0.0000
-09:23        203  Warning     Missing Usage     Bathroom      0.6667  0.6667
-09:30        210  Warning     Missing Usage     Bathroom      0.9091  0.9091
-09:40        220  Warning     Missing Usage     Bathroom      0.9524  0.9524
-09:50        230  Warning     Missing Usage     Bathroom      0.9545  0.9545
-10:00        240  Warning     Missing Usage     Bathroom      0.9091  0.9091
-10:09        249  Normal      -                 -             0.0000  0.5000
+09:30        210  Normal      -                 -             0.0000  0.5556
+09:35        215  Warning     Missing Usage     Bathroom      0.6522  0.6522
+09:40        220  Warning     Missing Usage     Bathroom      0.7143  0.7143
+09:50        230  Warning     Missing Usage     Bathroom      0.7241  0.7241
+09:56        236  Normal      -                 -             0.0000  0.6364
+10:00        240  Normal      -                 -             0.0000  0.5556
 10:10        250  Normal      -                 -             0.0000  0.0000
 10:20        260  Normal      -                 -             0.0000  0.0000
 10:30        270  Normal      -                 -             0.0000  0.0000

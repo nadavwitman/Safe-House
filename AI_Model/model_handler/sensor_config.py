@@ -40,36 +40,36 @@ DEFAULT_SENSOR_CONFIG = {
     KITCHEN: _cfg(
         enabled={'static', 'missing', 'frequency'},
         minimum_expected_run=60,
-        missing_grace=120, missing_tolerance=1.0,
-        frequency_lookback=180, frequency_tolerance=5,
+        missing_grace=120, missing_tolerance=8.0,
+        frequency_lookback=180, frequency_tolerance=10.0,
         hosting_suppression=True,
     ),
     BATHROOM: _cfg(
         enabled={'static', 'missing', 'frequency'},
         # Real visits run up to ~22min (p99) -- shower included.
         minimum_expected_run=30,
-        missing_grace=90, missing_tolerance=1.0,
-        frequency_lookback=240, frequency_tolerance=4,
+        missing_grace=90, missing_tolerance=8.0,
+        frequency_lookback=240, frequency_tolerance=13.0,
         hosting_suppression=True,
     ),
     TOILET: _cfg(
         enabled={'static', 'missing', 'frequency'},
         minimum_expected_run=30,
-        missing_grace=90, missing_tolerance=2.0,
-        frequency_lookback=180, frequency_tolerance=3,   # sensitive to repeated night visits
+        missing_grace=90, missing_tolerance=10.0,
+        frequency_lookback=180, frequency_tolerance=6.0,   # sensitive to repeated night visits
         hosting_suppression=True,
     ),
     # Medications is event-only: never static-location scored, per spec.
     MEDS: _cfg(
         enabled={'missing', 'frequency'},
-        missing_grace=120, missing_tolerance=0.1,
-        frequency_lookback=360, frequency_tolerance=2,
+        missing_grace=120, missing_tolerance=3.0,
+        frequency_lookback=360, frequency_tolerance=8.0,
         hosting_suppression=False,
     ),
     BEDROOM: _cfg(
         enabled={'static', 'frequency'},
         minimum_expected_run=60,
-        frequency_lookback=240, frequency_tolerance=4,
+        frequency_lookback=240, frequency_tolerance=13.0,
         hosting_suppression=True,
     ),
     LIVING_ROOM: _cfg(
