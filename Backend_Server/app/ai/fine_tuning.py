@@ -14,7 +14,7 @@ POSITIVE_WEIGHT = 100.0
 
 
 def fine_tune_house_model(house_id: str, raw_training_data: list, house_sensor_mask: list,
-                          current_model=None, epochs=5, lr=0.001, batch_size=64):
+                          current_model=None, epochs=5, lr=0.001, batch_size=16):
     """
     Continual-learning fine-tune on the resident's recent (last-14-day) routine.
 
