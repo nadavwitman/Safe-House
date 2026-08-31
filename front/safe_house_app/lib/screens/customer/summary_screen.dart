@@ -916,7 +916,12 @@ class _SleepChartPainter extends CustomPainter {
     const padL = 32.0, padR = 12.0, padT = 10.0, padB = 24.0;
     final w = size.width - padL - padR;
     final h = size.height - padT - padB;
-    const maxHrs = 10.0, maxInt = 5.0;
+    const maxHrs = 10.0;
+    // Scale to the week's actual peak (floor of 5) instead of a fixed 5 — a hardcoded
+    // cap made any night at/above 5 interruptions render pinned near the same near-max
+    // bar height, making a typical week look uniformly maxed out.
+    final maxInt = math.max(
+        5.0, data.map((d) => d.interruptions).fold(0, math.max).toDouble());
     final innerInset = w * 0.04;
     final stepX = (w - innerInset * 2) / (data.length - 1).clamp(1, 99);
 
