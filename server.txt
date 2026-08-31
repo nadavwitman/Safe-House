@@ -107,8 +107,9 @@ Host: 16.164.45.100 (ubuntu user)
 Live port: 5000
 
 SSH:
-  # Ask the machine's owner for the SafeHouseKey.pem path (it's user-specific — do not assume one).
-  cp <path-to-SafeHouseKey.pem> ~/.ssh/SafeHouseKey.pem && chmod 400 ~/.ssh/SafeHouseKey.pem
+  # Key (Windows host, this machine): C:/final-project/SafeHouseKey.pem
+  #   -> from WSL that's /mnt/c/final-project/SafeHouseKey.pem
+  # Already installed at ~/.ssh/SafeHouseKey.pem (mode 400) on this dev machine — reuse it, don't re-copy.
   ssh -i ~/.ssh/SafeHouseKey.pem ubuntu@16.164.45.100
 
 Check status:
@@ -120,20 +121,66 @@ Start/stop (never deletes container):
   sudo docker stop safe-house-backend
   # if stop hangs (AppArmor bug): sudo kill -9 $(sudo docker inspect safe-house-backend --format '{{.State.Pid}}')
 
-Update code (build from repo root, test on 5001, then swap into 5000):
-  cd <repo root on server>
-  sudo docker build -f Backend_Server/Dockerfile -t safe-house-image:candidate .
-  sudo docker run -d --name sh-test -p 5001:5000 --env-file Backend_Server/.env \
-    -v <path-to-firebase-credentials.json>:/app/database/firebase-credentials.json \
-    -v safe-house-trained-models:/app/AI_Model/trained_models safe-house-image:candidate
-  sudo docker logs -f sh-test   # confirm clean boot, then: sudo docker rm -f sh-test
-  sudo docker tag safe-house-image:latest safe-house-image:rollback-$(date +%Y%m%d-%H%M%S)
-  sudo docker stop safe-house-backend && sudo docker rm safe-house-backend
-  sudo docker tag safe-house-image:candidate safe-house-image:latest
-  sudo docker run -d --name safe-house-backend --restart unless-stopped -p 5000:5000 \
-    --env-file Backend_Server/.env \
-    -v <path-to-firebase-credentials.json>:/app/database/firebase-credentials.json \
-    -v safe-house-trained-models:/app/AI_Model/trained_models safe-house-image:latest
+Secrets — STABLE paths on the server, NOT per-deploy, NOT inside any deploy-*/Backend_Server/ dir:
+  /home/ubuntu/safe-house.env                 (the --env-file)
+  /home/ubuntu/firebase-credentials.json      (the -v mount source)
+  These already exist on the server and never need to be copied from the local machine or from an
+  old deploy-* folder — always reference these exact paths in --env-file / -v below.
+
+There is NO persistent git repo / checked-out working copy on the server ("cd <repo root on server>"
+from an older version of this doc does not correspond to anything real). Each update is a fresh
+rsync of local code into a new timestamped dir under /home/ubuntu/, e.g. /home/ubuntu/deploy-<YYYYMMDD-HHMMSS>/.
+Old deploy-* dirs are NOT auto-cleaned — safe to `rm -rf` ones you no longer need once their image
+has been built (the built image is self-contained; the source dir isn't needed afterward except as
+a record). List them with `ls -la /home/ubuntu | grep deploy-`.
+
+Update code — full procedure, from the LOCAL machine (repo root), build+test+swap on the SERVER:
+
+  1. Sync code to a fresh deploy dir (from local repo root). Must rsync Backend_Server/ and AI_Model/
+     into SEPARATE destination subdirs — do NOT rsync multiple sources into one destination with a
+     trailing slash, it flattens both trees together and loses the Backend_Server/ and AI_Model/
+     prefixes the Dockerfile's COPY commands need. Also do NOT let a local venv/ folder get synced
+     (it's excluded by .dockerignore at build time, but still wastes GBs sitting on server disk if
+     rsync copies it — exclude it explicitly):
+
+     DEPLOY_DIR="deploy-$(date +%Y%m%d-%H%M%S)"
+     ssh -i ~/.ssh/SafeHouseKey.pem ubuntu@16.164.45.100 \
+       "mkdir -p /home/ubuntu/$DEPLOY_DIR/Backend_Server /home/ubuntu/$DEPLOY_DIR/AI_Model"
+     rsync -avz --exclude 'tests/' --exclude '__pycache__/' --exclude '*.pyc' --exclude '.pytest_cache/' \
+       --exclude '.env' --exclude 'venv/' --exclude '.venv/' --exclude 'env/' \
+       -e "ssh -i ~/.ssh/SafeHouseKey.pem" \
+       Backend_Server/ ubuntu@16.164.45.100:/home/ubuntu/$DEPLOY_DIR/Backend_Server/
+     rsync -avz --exclude 'tests/' --exclude 'training/' --exclude 'trained_models/' \
+       --exclude '__pycache__/' --exclude '*.pyc' \
+       -e "ssh -i ~/.ssh/SafeHouseKey.pem" \
+       AI_Model/ ubuntu@16.164.45.100:/home/ubuntu/$DEPLOY_DIR/AI_Model/
+     scp -i ~/.ssh/SafeHouseKey.pem .dockerignore ubuntu@16.164.45.100:/home/ubuntu/$DEPLOY_DIR/.dockerignore
+
+  2. Build + test on 5001, then swap into 5000 (run these on the SERVER, from inside $DEPLOY_DIR):
+     cd /home/ubuntu/$DEPLOY_DIR
+     sudo docker build -f Backend_Server/Dockerfile -t safe-house-image:candidate .
+     sudo docker run -d --name sh-test -p 5001:5000 --env-file /home/ubuntu/safe-house.env \
+       -v /home/ubuntu/firebase-credentials.json:/app/database/firebase-credentials.json \
+       -v safe-house-trained-models:/app/AI_Model/trained_models safe-house-image:candidate
+     sudo docker logs -f sh-test   # confirm clean boot, then: sudo docker rm -f sh-test
+     sudo docker tag safe-house-image:latest safe-house-image:rollback-$(date +%Y%m%d-%H%M%S)
+     sudo docker stop safe-house-backend && sudo docker rm safe-house-backend
+     sudo docker tag safe-house-image:candidate safe-house-image:latest
+     sudo docker run -d --name safe-house-backend --restart unless-stopped -p 5000:5000 \
+       --env-file /home/ubuntu/safe-house.env \
+       -v /home/ubuntu/firebase-credentials.json:/app/database/firebase-credentials.json \
+       -v safe-house-trained-models:/app/AI_Model/trained_models safe-house-image:latest
+
+  3. Verify the fine-tuned model carried over (it lives in the volume, unaffected by the rebuild —
+     but worth a sanity check after every swap):
+     sudo docker exec safe-house-backend ls -la /app/AI_Model/trained_models/<house_id>/
+     sudo docker logs --since 10m safe-house-backend | grep -i 'fine-tune generations'
+
+  4. Cleanup after a successful swap — keep exactly ONE rollback tag (delete older ones), and prune
+     dangling/untagged image layers left over from the build:
+     sudo docker image prune -f
+     sudo docker rmi safe-house-image:rollback-<older-timestamp>
+     # also fine to delete: rm -rf /home/ubuntu/<old-deploy-dir> once its image is built & swapped in
 
 Fine-tuned per-house models are now stored on local disk (AI_Model/trained_models/{house_id}/anomaly_detector.pkl,
 one file overwritten per retrain — see app/ai/model_manager.py) instead of Firebase Storage, since Storage
@@ -142,6 +189,9 @@ every `docker rm` + `docker run` update wipes fine-tuned models and each house s
 checkpoint (AI_Model/model/best_safe_house_model.pth).
 
 Current production image: safe-house-image:latest
+Disk/RAM notes: server is a small box (28G disk, ~900MB RAM, swap in regular use — this is normal, not
+an incident). Watch disk after deploys — a stray venv/ sync or accumulated deploy-* dirs are the usual cause
+of unexpected growth, not the docker images themselves (those stay ~2GB each, images share base layers).
 
 
 == Verification performed ==
