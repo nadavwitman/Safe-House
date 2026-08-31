@@ -208,7 +208,7 @@ def get_last_complete_week(now=None):
     return end - timedelta(days=7), end
 
 
-def run_insights_pipeline(house_id, raw_docs, advance_baseline=True):
+def run_insights_pipeline(house_id, raw_docs, advance_baseline=True, week_start=None):
     """
     Full pipeline: load mask → load baseline → aggregate → compute deltas
     → format prompt → call Gemini.
@@ -239,7 +239,7 @@ def run_insights_pipeline(house_id, raw_docs, advance_baseline=True):
     house_mask = house_mask_store.get_mask(house_id)
     baseline   = database.get_baseline(house_id)
 
-    metrics         = aggregate_weekly_metrics(raw_docs, house_mask)
+    metrics         = aggregate_weekly_metrics(raw_docs, house_mask, week_start=week_start)
     current_avgs    = compute_weekly_averages_for_baseline(metrics['days'])
     deltas          = compute_deltas(current_avgs, baseline)
     new_baseline    = build_new_baseline(current_avgs, baseline)
@@ -277,7 +277,7 @@ def generate_and_store(house_id):
     if not raw_docs:
         return 'no_data', None
 
-    metrics, ai_output = run_insights_pipeline(house_id, raw_docs)
+    metrics, ai_output = run_insights_pipeline(house_id, raw_docs, week_start=start)
     if metrics is None:
         return 'insufficient_data', None
 

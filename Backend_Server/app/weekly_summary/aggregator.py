@@ -27,7 +27,7 @@ def _coverage_fraction(df_slice, span_minutes):
     return float(covered) / span_minutes
 
 
-def aggregate_weekly_metrics(raw_docs, house_mask):
+def aggregate_weekly_metrics(raw_docs, house_mask, week_start=None):
     """
     Aggregates a week of sensor readings into structured daily metrics.
 
@@ -36,6 +36,13 @@ def aggregate_weekly_metrics(raw_docs, house_mask):
     raw_docs   : list[dict] — each with 'sensor_vector' (7-bit list), 'time' (datetime UTC),
                  'current_location' (7-bit one-hot list)
     house_mask : list[int] — 7-bit mask; 0 = sensor absent
+    week_start : the report window's start (tz-aware, any tz) — anchors the 7 daily buckets
+                 to the calendar date this window actually starts on in LOCAL_TZ. The fetch
+                 window is aligned to WEEK_BOUNDARY_HOUR (06:00), not local midnight, so it
+                 straddles 8 raw calendar dates (a trailing sliver of the closing Sunday);
+                 bucketing off the raw dates in the data would double up that boundary day.
+                 Defaults to the earliest reading's local date when omitted (tests / ad-hoc
+                 windows that don't straddle a boundary).
 
     Returns
     -------
@@ -61,7 +68,16 @@ def aggregate_weekly_metrics(raw_docs, house_mask):
     df['date'] = df['time'].dt.date
     df = df.sort_values('time').reset_index(drop=True)
 
-    unique_dates = sorted(df['date'].unique())
+    # Anchor the 7 buckets to the window's actual start date rather than the raw dates
+    # present in the data — those span 8 calendar dates because the fetch window is
+    # aligned to WEEK_BOUNDARY_HOUR, not local midnight (see week_start docstring above).
+    if week_start is not None:
+        start_date = pd.Timestamp(week_start).tz_convert(LOCAL_TZ).date()
+        unique_dates = [start_date + timedelta(days=i) for i in range(7)]
+    else:
+        # No explicit window given (tests / ad-hoc calls) — fall back to whatever
+        # calendar dates actually appear in the data.
+        unique_dates = sorted(df['date'].unique())
     daily_metrics = []
 
     for date in unique_dates:
