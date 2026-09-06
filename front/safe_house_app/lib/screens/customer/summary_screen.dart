@@ -476,10 +476,9 @@ class _ReportBody extends StatelessWidget {
           if (sleepData.isNotEmpty)
             _ChartCard(
               title: 'Sleep',
-              subtitle: 'Hours slept + overnight interruptions',
+              subtitle: 'Hours slept',
               legend: [
                 (color: AppColors.sage800, label: 'Hours'),
-                (color: AppColors.warn, label: 'Interruptions'),
               ],
               child: SizedBox(
                   height: 170,
@@ -627,17 +626,19 @@ class _ReportBody extends StatelessWidget {
     ];
   }
 
-  static List<({String day, double hours, int interruptions})> _buildSleepData(
+  static List<({String day, double? hours})> _buildSleepData(
       List<Map<String, dynamic>> days) {
     return days.map((d) {
       final dt = DateTime.tryParse(d['date'] as String? ?? '');
       const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
       final label =
           dt != null ? labels[dt.weekday - 1] : (d['date'] as String? ?? '?');
+      // Keep null as null rather than coercing to 0 — a night with too little sensor
+      // coverage to trust (see aggregator.py's sleep_ok gate) is "no data", not "slept
+      // zero hours", and the chart must be able to tell the two apart.
       return (
         day: label,
-        hours: (d['sleep_hours'] as num?)?.toDouble() ?? 0.0,
-        interruptions: (d['interruptions'] as num?)?.toInt() ?? 0,
+        hours: (d['sleep_hours'] as num?)?.toDouble(),
       );
     }).toList();
   }
@@ -907,7 +908,7 @@ class _ChartCard extends StatelessWidget {
 
 // ── Sleep Chart Painter ────────────────────────────────────────
 class _SleepChartPainter extends CustomPainter {
-  final List<({String day, double hours, int interruptions})> data;
+  final List<({String day, double? hours})> data;
   const _SleepChartPainter(this.data);
 
   @override
@@ -917,11 +918,6 @@ class _SleepChartPainter extends CustomPainter {
     final w = size.width - padL - padR;
     final h = size.height - padT - padB;
     const maxHrs = 10.0;
-    // Scale to the week's actual peak (floor of 5) instead of a fixed 5 — a hardcoded
-    // cap made any night at/above 5 interruptions render pinned near the same near-max
-    // bar height, making a typical week look uniformly maxed out.
-    final maxInt = math.max(
-        5.0, data.map((d) => d.interruptions).fold(0, math.max).toDouble());
     final innerInset = w * 0.04;
     final stepX = (w - innerInset * 2) / (data.length - 1).clamp(1, 99);
 
@@ -949,71 +945,92 @@ class _SleepChartPainter extends CustomPainter {
       tp.paint(canvas, Offset(padL - tp.width - 4, y - tp.height / 2));
     }
 
-    final barW = stepX * 0.38;
-    final barMaxH = h * 0.78;
-    final barPaint = Paint()..color = AppColors.warn;
-    for (int i = 0; i < data.length; i++) {
-      final d = data[i];
-      final bh = d.interruptions == 0
-          ? 4.0
-          : math.max(8.0, (d.interruptions / maxInt) * barMaxH);
-      final rect = RRect.fromRectAndRadius(
-          Rect.fromLTWH(xAt(i) - barW / 2, padT + h - bh, barW, bh),
-          const Radius.circular(3));
-      barPaint.color =
-          AppColors.warn.withValues(alpha: d.interruptions == 0 ? 0.18 : 0.7);
-      canvas.drawRRect(rect, barPaint);
-    }
+    // A null night (too little sensor coverage to trust — see aggregator.py's
+    // sleep_ok gate) is "no data", not "slept zero hours". It gets no point, no
+    // line segment through it, and no area fill under it — a visible gap in the
+    // chart rather than a misleading dip to the bottom.
+    final pts = List<Offset?>.generate(
+        data.length,
+        (i) =>
+            data[i].hours == null ? null : Offset(xAt(i), yAt(data[i].hours!)));
 
-    final pts =
-        List.generate(data.length, (i) => Offset(xAt(i), yAt(data[i].hours)));
-    final areaPath = Path()..moveTo(pts.first.dx, padT + h);
-    for (final p in pts) {
-      areaPath.lineTo(p.dx, p.dy);
-    }
-    areaPath.lineTo(pts.last.dx, padT + h);
-    areaPath.close();
-    canvas.drawPath(
-        areaPath,
-        Paint()
-          ..shader = LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              AppColors.sage600.withValues(alpha: 0.25),
-              AppColors.sage600.withValues(alpha: 0.0)
-            ],
-          ).createShader(Rect.fromLTWH(0, padT, size.width, h)));
-
+    // Area + line, drawn per contiguous run of non-null points so a gap breaks both.
+    final areaPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          AppColors.sage600.withValues(alpha: 0.25),
+          AppColors.sage600.withValues(alpha: 0.0)
+        ],
+      ).createShader(Rect.fromLTWH(0, padT, size.width, h));
     final linePaint = Paint()
       ..color = AppColors.sage800
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
-    final linePath = Path()..moveTo(pts.first.dx, pts.first.dy);
-    for (int i = 1; i < pts.length; i++) {
-      linePath.lineTo(pts[i].dx, pts[i].dy);
-    }
-    canvas.drawPath(linePath, linePaint);
 
-    for (int i = 0; i < data.length; i++) {
-      canvas.drawCircle(pts[i], 4.5, Paint()..color = const Color(0xFFFBF8F0));
-      canvas.drawCircle(
-          pts[i],
-          4.5,
-          Paint()
-            ..color = AppColors.sage800
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.8);
+    int i = 0;
+    while (i < pts.length) {
+      if (pts[i] == null) {
+        i++;
+        continue;
+      }
+      int j = i;
+      while (j + 1 < pts.length && pts[j + 1] != null) {
+        j++;
+      }
+      final run = pts.sublist(i, j + 1).cast<Offset>();
+      if (run.length > 1) {
+        final areaPath = Path()..moveTo(run.first.dx, padT + h);
+        for (final p in run) {
+          areaPath.lineTo(p.dx, p.dy);
+        }
+        areaPath.lineTo(run.last.dx, padT + h);
+        areaPath.close();
+        canvas.drawPath(areaPath, areaPaint);
+
+        final linePath = Path()..moveTo(run.first.dx, run.first.dy);
+        for (final p in run.skip(1)) {
+          linePath.lineTo(p.dx, p.dy);
+        }
+        canvas.drawPath(linePath, linePaint);
+      }
+      i = j + 1;
+    }
+
+    for (int k = 0; k < data.length; k++) {
+      final p = pts[k];
+      if (p != null) {
+        canvas.drawCircle(p, 4.5, Paint()..color = const Color(0xFFFBF8F0));
+        canvas.drawCircle(
+            p,
+            4.5,
+            Paint()
+              ..color = AppColors.sage800
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 1.8);
+      } else {
+        // No-data marker: a faint hollow dot sitting on the baseline, not at zero
+        // height on the hours scale, so it reads as "unknown" rather than "none".
+        final baseline = Offset(xAt(k), padT + h);
+        canvas.drawCircle(
+            baseline,
+            3.5,
+            Paint()
+              ..color = AppColors.ink500.withValues(alpha: 0.35)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 1.4);
+      }
       final tp = TextPainter(
         text: TextSpan(
-            text: data[i].day,
+            text: data[k].day,
             style: const TextStyle(
                 fontSize: 10, color: AppColors.ink500, fontFamily: 'Manrope')),
         textDirection: TextDirection.ltr,
       )..layout();
-      tp.paint(canvas, Offset(xAt(i) - tp.width / 2, padT + h + 6));
+      tp.paint(canvas, Offset(xAt(k) - tp.width / 2, padT + h + 6));
     }
   }
 

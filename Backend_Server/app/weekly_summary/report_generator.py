@@ -191,6 +191,16 @@ def generate_weekly_report(compact_prompt):
 # whether it came from the Sunday job or a later catch-up.
 WEEK_BOUNDARY_HOUR = 6
 
+# The first night's sleep window (aggregator.py) reaches back to 20:00 LOCAL_TZ on the
+# day before `start` — up to 10h before `start` in the worst-case UTC/local offset, plus
+# the fetch window boundary itself is a UTC wall-clock hour rather than local midnight.
+# Without this lead-in, get_weekly_sensor_data(start, end) never pulls those readings at
+# all (not a coverage gap — they're outside the query), so the first night's sleep_hours
+# and interruptions are nulled even on a night with perfect sensor coverage. Widening the
+# fetch by a full day is a generous margin; aggregate_weekly_metrics still buckets exactly
+# 7 days off `week_start`, so the extra lead-in readings never create a stray 8th day.
+SLEEP_WINDOW_FETCH_LEAD_IN = timedelta(hours=24)
+
 
 def get_last_complete_week(now=None):
     """Returns (start, end) — the most recently completed Sunday 06:00 to
@@ -273,7 +283,7 @@ def generate_and_store(house_id):
     advance the baseline, unlike an on-demand re-run of the same week.
     """
     start, end = get_last_complete_week()
-    raw_docs = database.get_weekly_sensor_data(house_id, start, end)
+    raw_docs = database.get_weekly_sensor_data(house_id, start - SLEEP_WINDOW_FETCH_LEAD_IN, end)
     if not raw_docs:
         return 'no_data', None
 
