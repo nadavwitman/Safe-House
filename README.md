@@ -4,6 +4,8 @@ An IoT elderly-monitoring system. Motion and contact sensors placed around a res
 
 The design constraint the whole system is built around: **no cameras, no microphones.** Every signal is ambient — a door opened, a bed occupied, a cabinet accessed — so the resident keeps their privacy while their family keeps their peace of mind.
 
+YouTube link: https://youtu.be/PUYbugwY9Vg?si=zoO-TC4ajeanfxbf
+
 ## How it fits together
 
 ```mermaid
